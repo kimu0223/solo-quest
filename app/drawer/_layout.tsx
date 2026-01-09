@@ -50,13 +50,16 @@ export default function DrawerLayout() {
             drawerIcon: ({ color }) => <Ionicons name="person-outline" size={22} color={color} />,
           }}
         />
-        <Drawer.Screen
+        
+        {/* GUILD MASTER (管理) はメニューから隠すためコメントアウトしています */}
+        {/* <Drawer.Screen
           name="admin"
           options={{
             drawerLabel: 'GUILD MASTER (管理)',
             drawerIcon: ({ color }) => <Ionicons name="settings-outline" size={22} color={color} />,
           }}
-        />
+        /> 
+        */}
       </Drawer>
     </GestureHandlerRootView>
   );
