@@ -1,29 +1,43 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Slot, useRootNavigationState, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import React, { useCallback, useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  // アンカーを drawer に設定
-  initialRouteName: 'drawer',
-};
+import { supabase } from '@/lib/supabase';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
+  const navigationState = useRootNavigationState();
+
+  const checkAuthAndNavigate = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        // ログイン済み → ホーム画面へ
+        router.replace('/drawer');
+      } else {
+        // ログインしていない → ログイン画面へ
+        router.replace('/auth/login');
+      }
+    } catch (error) {
+      console.error('Auth check error:', error);
+      router.replace('/auth/login');
+    }
+  }, [router]);
+
+  useEffect(() => {
+    if (!navigationState?.key) return;
+
+    checkAuthAndNavigate();
+  }, [navigationState?.key, checkAuthAndNavigate]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        {/* drawerフォルダを読み込む設定 */}
-        <Stack.Screen name="drawer" options={{ headerShown: false }} />
-        
-        {/* 以前の(tabs)は削除済みなので記述しない */}
-        
-        <Stack.Screen name="admin" options={{ title: 'ギルドマスターの部屋', presentation: 'modal' }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
+      <Slot />
       <StatusBar style="auto" />
     </ThemeProvider>
   );

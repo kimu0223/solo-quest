@@ -1,8 +1,11 @@
+import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const COLORS = {
   background: '#0A0A15',
@@ -13,12 +16,38 @@ const COLORS = {
 };
 
 export default function CustomDrawerContent(props: any) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'ログアウト',
+      'ログアウトしてもよろしいですか？',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: 'ログアウト',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.auth.signOut();
+              router.replace('/auth/login');
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('エラー', 'ログアウトに失敗しました');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <LinearGradient colors={['#1A1A2E', '#0A0A15']} style={StyleSheet.absoluteFill} />
       
       {/* ヘッダー部分 */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
         <View style={styles.logoCircle}>
           <Ionicons name="shield-checkmark" size={40} color={COLORS.primary} />
         </View>
@@ -31,8 +60,12 @@ export default function CustomDrawerContent(props: any) {
         <DrawerItemList {...props} />
       </DrawerContentScrollView>
 
-      {/* フッター */}
+      {/* フッター - ログアウトボタン */}
       <View style={styles.footer}>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color={COLORS.primary} />
+          <Text style={styles.logoutText}>ログアウト</Text>
+        </TouchableOpacity>
         <Text style={styles.footerText}>v1.0.0 Alpha</Text>
       </View>
     </View>
@@ -41,8 +74,8 @@ export default function CustomDrawerContent(props: any) {
 
 const styles = StyleSheet.create({
   header: {
-    padding: 30,
-    paddingTop: 60,
+    paddingHorizontal: 30,
+    paddingBottom: 30,
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
@@ -75,10 +108,30 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
   },
   footer: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     alignItems: 'center',
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 212, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginBottom: 15,
+    width: '100%',
+    gap: 8,
+  },
+  logoutText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   footerText: {
     color: COLORS.subText,

@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -10,7 +11,6 @@ import {
     TextInput, TouchableOpacity,
     View
 } from 'react-native';
-import { supabase } from '../lib/supabase';
 
 export default function AdminScreen() {
   const router = useRouter();
@@ -48,7 +48,7 @@ export default function AdminScreen() {
     };
 
     fetchPlayer();
-  }, []);
+  }, [router]);
 
   const addQuest = async () => {
     if (!questTitle.trim()) {
@@ -78,6 +78,11 @@ export default function AdminScreen() {
     } else {
       Alert.alert('成功', '新しいクエストを追加しました！');
       setQuestTitle(''); // 入力欄をクリア
+      setXpReward('10'); // 報酬をリセット
+      // 1秒後にホーム画面へ戻る（アラート閉じるのを待つため）
+      setTimeout(() => {
+        router.push('/drawer/index');
+      }, 1000);
     }
   };
 
