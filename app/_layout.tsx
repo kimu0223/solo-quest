@@ -1,44 +1,69 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Slot, useRootNavigationState, useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useEffect } from 'react';
-import 'react-native-reanimated';
+import CustomDrawerContent from '@/components/CustomDrawerContent';
+import { Ionicons } from '@expo/vector-icons';
+import { Drawer } from 'expo-router/drawer';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { supabase } from '@/lib/supabase';
+const COLORS = {
+  background: '#0A0A15',
+  primary: '#00D4FF',
+  text: '#FFFFFF',
+};
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const router = useRouter();
-  const navigationState = useRootNavigationState();
-
-  const checkAuthAndNavigate = useCallback(async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user) {
-        // ログイン済み → ホーム画面へ
-        router.replace('/drawer');
-      } else {
-        // ログインしていない → ログイン画面へ
-        router.replace('/auth/login');
-      }
-    } catch (error) {
-      console.error('Auth check error:', error);
-      router.replace('/auth/login');
-    }
-  }, [router]);
-
-  useEffect(() => {
-    if (!navigationState?.key) return;
-
-    checkAuthAndNavigate();
-  }, [navigationState?.key, checkAuthAndNavigate]);
-
+export default function DrawerLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Slot />
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Drawer
+        drawerContent={(props) => <CustomDrawerContent {...props} />}
+        screenOptions={{
+          headerShown: false,
+          drawerStyle: {
+            backgroundColor: COLORS.background,
+            width: 280,
+          },
+          drawerActiveTintColor: COLORS.primary,
+          drawerInactiveTintColor: COLORS.text,
+          drawerLabelStyle: {
+            fontFamily: 'Orbitron_400Regular',
+            fontSize: 14,
+            marginLeft: 0, // ▼修正：-20から0に変更（重なり解消）
+          },
+          drawerItemStyle: {
+            paddingLeft: 10, // アイコン周りの余白確保
+          }
+        }}
+      >
+        <Drawer.Screen
+          name="index"
+          options={{
+            drawerLabel: 'HOME (冒険)',
+            drawerIcon: ({ color }) => <Ionicons name="game-controller-outline" size={22} color={color} />,
+          }}
+        />
+        <Drawer.Screen
+          name="rewards"
+          options={{
+            drawerLabel: 'TREASURY (ご褒美)',
+            drawerIcon: ({ color }) => <Ionicons name="gift-outline" size={22} color={color} />,
+          }}
+        />
+        <Drawer.Screen
+          name="profile"
+          options={{
+            drawerLabel: 'HERO DATA (データ)',
+            drawerIcon: ({ color }) => <Ionicons name="person-outline" size={22} color={color} />,
+          }}
+        />
+        
+        {/* ▼▼▼ 追加: 規約ページ ▼▼▼ */}
+        <Drawer.Screen
+          name="legal"
+          options={{
+            drawerLabel: 'RULES (規約)',
+            drawerIcon: ({ color }) => <Ionicons name="document-text-outline" size={22} color={color} />,
+          }}
+        />
+        
+      </Drawer>
+    </GestureHandlerRootView>
   );
 }

@@ -25,8 +25,11 @@ export default function DrawerLayout() {
           drawerLabelStyle: {
             fontFamily: 'Orbitron_400Regular',
             fontSize: 14,
-            marginLeft: 10,
+            marginLeft: 0,
           },
+          drawerItemStyle: {
+            paddingLeft: 10,
+          }
         }}
       >
         <Drawer.Screen
@@ -50,13 +53,17 @@ export default function DrawerLayout() {
             drawerIcon: ({ color }) => <Ionicons name="person-outline" size={22} color={color} />,
           }}
         />
+        
+        {/* ▼▼▼ 修正: メニューリストからは隠す（CustomDrawerContent側で手動配置するため） ▼▼▼ */}
         <Drawer.Screen
-          name="admin"
+          name="legal"
           options={{
-            drawerLabel: 'GUILD MASTER (管理)',
-            drawerIcon: ({ color }) => <Ionicons name="settings-outline" size={22} color={color} />,
+            drawerLabel: 'RULES (規約)',
+            drawerIcon: ({ color }) => <Ionicons name="document-text-outline" size={22} color={color} />,
+            drawerItemStyle: { display: 'none' } // ← これでリストから消えます
           }}
         />
+        
       </Drawer>
     </GestureHandlerRootView>
   );
