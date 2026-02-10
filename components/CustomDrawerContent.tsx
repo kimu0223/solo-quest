@@ -14,14 +14,21 @@ const COLORS = {
   text: '#FFFFFF',
   subText: '#A0A0A0',
   border: 'rgba(0, 212, 255, 0.2)',
+  activeBg: 'rgba(0, 212, 255, 0.15)',
+};
+
+type Player = {
+  id: string;
+  name: string;
+  mana_color: string;
 };
 
 export default function CustomDrawerContent(props: any) {
   const router = useRouter();
-  const [players, setPlayers] = useState<any[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
+  // ドロワーが開くたびにプレイヤーリストと現在のアクティブIDを更新
   useFocusEffect(
     useCallback(() => {
       fetchPlayers();
@@ -33,26 +40,31 @@ export default function CustomDrawerContent(props: any) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // プレイヤーリスト取得
       const { data: playersData } = await supabase
         .from('players')
-        .select('*')
+        .select('id, name, mana_color')
         .eq('parent_id', user.id)
         .order('created_at', { ascending: true });
 
       setPlayers(playersData || []);
+
+      // 現在選択中のID取得
       const currentId = await AsyncStorage.getItem('activePlayerId');
       setActivePlayerId(currentId);
     } catch (e) {
-      console.error(e);
+      console.error('Drawer fetch error:', e);
     }
   };
 
   const handleSwitchPlayer = async (playerId: string) => {
+    if (activePlayerId === playerId) return; // 同じなら何もしない
+
     await AsyncStorage.setItem('activePlayerId', playerId);
     setActivePlayerId(playerId);
     props.navigation.closeDrawer();
     
-    // ▼ 修正: replace を使ってスタックをリセットし、確実に全画面を再読み込みさせる
+    // ホーム画面をリロードさせるために replace を使用
     router.replace('/drawer');
   };
 
@@ -63,22 +75,26 @@ export default function CustomDrawerContent(props: any) {
         text: 'ログアウト',
         style: 'destructive',
         onPress: async () => {
-          // 確実に順番に実行
-          await supabase.auth.signOut();
-          await AsyncStorage.clear(); 
-          router.replace('/auth/login');
+          try {
+            await AsyncStorage.clear(); 
+            await supabase.auth.signOut();
+            router.replace('/auth/login');
+          } catch (e) {
+            console.error("Logout failed:", e);
+            router.replace('/auth/login');
+          }
         }
       }
     ]);
   };
 
   const handleAddUser = () => {
-    if (players.length >= 2) {
-      Alert.alert('プレミアム機能', '勇者を3人以上登録するには、ギルド拡張パス（¥500）が必要です。', [
-        { text: 'やめる', style: 'cancel' },
-        { text: '購入する (¥500)', onPress: () => router.push('/onboarding') }
-      ]);
+    // 3人以上の制限ロジック（将来用）
+    if (players.length >= 3) {
+      Alert.alert('パーティ満員', 'これ以上勇者を登録できません（最大3人）');
     } else {
+      // ドロワーを閉じてから遷移
+      props.navigation.closeDrawer();
       router.push('/onboarding');
     }
   };
@@ -86,44 +102,66 @@ export default function CustomDrawerContent(props: any) {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <LinearGradient colors={['#1A1A2E', '#0A0A15']} style={StyleSheet.absoluteFill} />
+      
+      {/* ヘッダー */}
       <View style={styles.header}>
         <View style={styles.logoCircle}>
-          <Ionicons name="shield-checkmark" size={40} color={COLORS.primary} />
+          <Ionicons name="shield-checkmark" size={32} color={COLORS.primary} />
         </View>
-        <Text style={styles.title}>SOLO QUEST</Text>
-        <Text style={styles.subtitle}>GUILD MENU</Text>
+        <View>
+          <Text style={styles.title}>SOLO QUEST</Text>
+          <Text style={styles.subtitle}>GUILD MENU</Text>
+        </View>
       </View>
 
-      <DrawerContentScrollView {...props}>
-        <DrawerItemList {...props} />
+      <DrawerContentScrollView {...props} contentContainerStyle={{ paddingTop: 0 }}>
+        {/* 標準のメニュー項目 (Home, Rewards, etc.) */}
+        <View style={styles.menuList}>
+          <DrawerItemList {...props} />
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* プレイヤー切り替えセクション */}
         <View style={styles.switchSection}>
-          <Text style={styles.sectionLabel}>勇者を切り替える</Text>
-          {players.map((player) => (
-            <TouchableOpacity
-              key={player.id}
-              style={[styles.playerItem, activePlayerId === player.id && styles.activePlayerItem]}
-              onPress={() => handleSwitchPlayer(player.id)}
-            >
-              <View style={[styles.playerAvatar, { backgroundColor: player.mana_color || '#333' }]} />
-              <Text style={[styles.playerName, activePlayerId === player.id && styles.activePlayerName]}>
-                {player.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <Text style={styles.sectionLabel}>勇者を選択</Text>
+          {players.map((player) => {
+            const isActive = activePlayerId === player.id;
+            return (
+              <TouchableOpacity
+                key={player.id}
+                style={[styles.playerItem, isActive && styles.activePlayerItem]}
+                onPress={() => handleSwitchPlayer(player.id)}
+              >
+                <View style={[styles.playerAvatar, { backgroundColor: player.mana_color || '#333' }]}>
+                  <Ionicons name="person" size={14} color="#fff" />
+                </View>
+                <Text style={[styles.playerName, isActive && styles.activePlayerName]}>
+                  {player.name}
+                </Text>
+                {isActive && <Ionicons name="checkmark-circle" size={16} color={COLORS.primary} style={{ marginLeft: 'auto' }} />}
+              </TouchableOpacity>
+            );
+          })}
+          
           <TouchableOpacity onPress={handleAddUser} style={styles.addBtn}>
-            <Ionicons name="add" size={16} color={COLORS.subText} />
-            <Text style={styles.addText}>新しく追加</Text>
+            <View style={styles.addIconCircle}>
+              <Ionicons name="add" size={20} color={COLORS.text} />
+            </View>
+            <Text style={styles.addText}>新しい勇者を登録</Text>
           </TouchableOpacity>
         </View>
       </DrawerContentScrollView>
 
+      {/* フッター */}
       <View style={styles.footerSection}>
-        <TouchableOpacity onPress={handleLogout} style={styles.menuItem}>
-          <Ionicons name="log-out-outline" size={22} color={COLORS.subText} />
-          <Text style={styles.menuText}>ログアウト</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/drawer/legal')} style={styles.menuItem}>
+        <TouchableOpacity onPress={() => router.push('/drawer/legal')} style={styles.footerLink}>
           <Text style={styles.legalText}>利用規約・ポリシー</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+          <Ionicons name="log-out-outline" size={20} color="#FF3131" />
+          <Text style={styles.logoutText}>ログアウト</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -131,21 +169,66 @@ export default function CustomDrawerContent(props: any) {
 }
 
 const styles = StyleSheet.create({
-  header: { padding: 30, paddingTop: 60, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  logoCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(0, 212, 255, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: COLORS.primary },
-  title: { color: COLORS.text, fontSize: 20, fontWeight: 'bold' },
-  subtitle: { color: COLORS.subText, fontSize: 10, letterSpacing: 2 },
-  switchSection: { marginTop: 20, paddingHorizontal: 20 },
-  sectionLabel: { color: '#555', fontSize: 11, marginBottom: 10, fontWeight: 'bold' },
-  playerItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 8, marginBottom: 5 },
-  activePlayerItem: { backgroundColor: 'rgba(0, 212, 255, 0.15)' },
-  playerAvatar: { width: 12, height: 12, borderRadius: 6, marginRight: 10 },
-  playerName: { color: COLORS.subText, fontSize: 14 },
-  activePlayerName: { color: COLORS.primary, fontWeight: 'bold' },
-  addBtn: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingLeft: 10 },
-  addText: { color: '#555', fontSize: 13, marginLeft: 5 },
-  footerSection: { padding: 20, borderTopWidth: 1, borderTopColor: COLORS.border },
-  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
-  menuText: { color: COLORS.subText, marginLeft: 10 },
-  legalText: { color: '#444', fontSize: 11 },
+  header: { 
+    padding: 20, 
+    paddingTop: 60, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    borderBottomWidth: 1, 
+    borderBottomColor: COLORS.border,
+    marginBottom: 10
+  },
+  logoCircle: { 
+    width: 50, 
+    height: 50, 
+    borderRadius: 25, 
+    backgroundColor: 'rgba(0, 212, 255, 0.1)', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 15,
+    borderWidth: 1, 
+    borderColor: COLORS.primary 
+  },
+  title: { color: COLORS.text, fontSize: 18, fontWeight: 'bold', letterSpacing: 1 },
+  subtitle: { color: COLORS.primary, fontSize: 10, letterSpacing: 2 },
+  
+  menuList: { paddingHorizontal: 10 },
+  divider: { height: 1, backgroundColor: '#333', marginVertical: 15, marginHorizontal: 20 },
+
+  switchSection: { paddingHorizontal: 20 },
+  sectionLabel: { color: '#666', fontSize: 12, marginBottom: 10, fontWeight: 'bold' },
+  
+  playerItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    padding: 12, 
+    borderRadius: 12, 
+    marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.03)'
+  },
+  activePlayerItem: { 
+    backgroundColor: COLORS.activeBg,
+    borderWidth: 1,
+    borderColor: COLORS.border
+  },
+  playerAvatar: { 
+    width: 24, 
+    height: 24, 
+    borderRadius: 12, 
+    marginRight: 12, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  playerName: { color: COLORS.subText, fontSize: 14, fontWeight: '600' },
+  activePlayerName: { color: COLORS.text, fontWeight: 'bold' },
+  
+  addBtn: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingVertical: 8 },
+  addIconCircle: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  addText: { color: '#aaa', fontSize: 14 },
+  
+  footerSection: { padding: 20, borderTopWidth: 1, borderTopColor: '#333' },
+  footerLink: { marginBottom: 15 },
+  legalText: { color: '#666', fontSize: 12 },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center' },
+  logoutText: { color: '#FF3131', marginLeft: 10, fontWeight: 'bold' },
 });

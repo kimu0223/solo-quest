@@ -1,9 +1,17 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
 
-// .env から値を読み込みます
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-// これがアプリ全体で使う「Supabaseくん」本体になります
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// ★重要: これがモバイルアプリにおける「完成形」の設定です。
+// auth.storage に AsyncStorage を渡すことで、アプリを再起動してもログインが維持されます。
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});

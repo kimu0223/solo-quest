@@ -1,8 +1,20 @@
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // 追加
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -10,6 +22,31 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+
+  // ★追加: プレイヤーが存在するか確認して振り分ける関数
+  const checkPlayerAndRedirect = async (userId: string) => {
+    try {
+      // プレイヤーデータがあるか確認
+      const { data: players } = await supabase
+        .from('players')
+        .select('id')
+        .eq('parent_id', userId)
+        .limit(1);
+
+      if (players && players.length > 0) {
+        // プレイヤーがいればIDを保存してホームへ
+        await AsyncStorage.setItem('activePlayerId', players[0].id);
+        router.replace('/drawer'); 
+      } else {
+        // いなければオンボーディング（勇者作成）へ
+        router.replace('/onboarding');
+      }
+    } catch (e) {
+      console.error(e);
+      // エラー時は安全のためオンボーディングへ
+      router.replace('/onboarding');
+    }
+  };
 
   const handleAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -20,39 +57,41 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       if (isSignUp) {
-        // サインアップ
-        const { error } = await supabase.auth.signUp({
+        // --- サインアップ処理 ---
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         });
 
-        if (error) {
-          Alert.alert('エラー', error.message);
-          return;
+        if (error) throw error;
+
+        // セッションが確立されたら（自動ログイン成功）、オンボーディングへ
+        if (data.session) {
+          Alert.alert('成功', 'アカウントを作成しました！勇者を作りに行こう！');
+          router.replace('/onboarding');
+        } else {
+          // メール確認が必要な設定の場合などはここに来る
+          Alert.alert('確認', '確認メールを送信しました。メール内のリンクをクリックしてログインしてください。');
+          setIsSignUp(false); // ログインモードに戻す
         }
 
-        Alert.alert('成功', 'アカウントを作成しました。ログインしてください。');
-        setIsSignUp(false);
-        setEmail('');
-        setPassword('');
       } else {
-        // ログイン
-        const { error } = await supabase.auth.signInWithPassword({
+        // --- ログイン処理 ---
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
 
-        if (error) {
-          Alert.alert('エラー', error.message);
-          return;
-        }
+        if (error) throw error;
 
-        // ログイン成功後、ホーム画面へ遷移
-        router.replace('/drawer');
+        if (data.user) {
+          // ログイン成功後、プレイヤーの有無をチェックして遷移
+          await checkPlayerAndRedirect(data.user.id);
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Auth error:', error);
-      Alert.alert('エラー', 'ログイン処理に失敗しました');
+      Alert.alert('エラー', error.message || '処理に失敗しました');
     } finally {
       setLoading(false);
     }
