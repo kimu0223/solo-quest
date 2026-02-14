@@ -28,7 +28,6 @@ export default function CustomDrawerContent(props: any) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
 
-  // ドロワーが開くたびにプレイヤーリストと現在のアクティブIDを更新
   useFocusEffect(
     useCallback(() => {
       fetchPlayers();
@@ -40,7 +39,6 @@ export default function CustomDrawerContent(props: any) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // プレイヤーリスト取得
       const { data: playersData } = await supabase
         .from('players')
         .select('id, name, mana_color')
@@ -48,8 +46,6 @@ export default function CustomDrawerContent(props: any) {
         .order('created_at', { ascending: true });
 
       setPlayers(playersData || []);
-
-      // 現在選択中のID取得
       const currentId = await AsyncStorage.getItem('activePlayerId');
       setActivePlayerId(currentId);
     } catch (e) {
@@ -58,13 +54,10 @@ export default function CustomDrawerContent(props: any) {
   };
 
   const handleSwitchPlayer = async (playerId: string) => {
-    if (activePlayerId === playerId) return; // 同じなら何もしない
-
+    if (activePlayerId === playerId) return;
     await AsyncStorage.setItem('activePlayerId', playerId);
     setActivePlayerId(playerId);
     props.navigation.closeDrawer();
-    
-    // ホーム画面をリロードさせるために replace を使用
     router.replace('/drawer');
   };
 
@@ -80,7 +73,6 @@ export default function CustomDrawerContent(props: any) {
             await supabase.auth.signOut();
             router.replace('/auth/login');
           } catch (e) {
-            console.error("Logout failed:", e);
             router.replace('/auth/login');
           }
         }
@@ -88,12 +80,18 @@ export default function CustomDrawerContent(props: any) {
     ]);
   };
 
+  // ★ここが人数制限ロジック
   const handleAddUser = () => {
-    // 3人以上の制限ロジック（将来用）
-    if (players.length >= 3) {
-      Alert.alert('パーティ満員', 'これ以上勇者を登録できません（最大3人）');
+    // 2人以上の場合はブロックする
+    if (players.length >= 2) {
+      Alert.alert(
+        'パーティ人数制限',
+        '無料プランで登録できる勇者は2名までです。\n3人目以降の登録機能は現在準備中です。',
+        [
+          { text: 'OK', onPress: () => {} }
+        ]
+      );
     } else {
-      // ドロワーを閉じてから遷移
       props.navigation.closeDrawer();
       router.push('/onboarding');
     }
@@ -103,7 +101,6 @@ export default function CustomDrawerContent(props: any) {
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <LinearGradient colors={['#1A1A2E', '#0A0A15']} style={StyleSheet.absoluteFill} />
       
-      {/* ヘッダー */}
       <View style={styles.header}>
         <View style={styles.logoCircle}>
           <Ionicons name="shield-checkmark" size={32} color={COLORS.primary} />
@@ -115,16 +112,14 @@ export default function CustomDrawerContent(props: any) {
       </View>
 
       <DrawerContentScrollView {...props} contentContainerStyle={{ paddingTop: 0 }}>
-        {/* 標準のメニュー項目 (Home, Rewards, etc.) */}
         <View style={styles.menuList}>
           <DrawerItemList {...props} />
         </View>
 
         <View style={styles.divider} />
 
-        {/* プレイヤー切り替えセクション */}
         <View style={styles.switchSection}>
-          <Text style={styles.sectionLabel}>勇者を選択</Text>
+          <Text style={styles.sectionLabel}>勇者を選択 ({players.length}/2)</Text>
           {players.map((player) => {
             const isActive = activePlayerId === player.id;
             return (
@@ -153,7 +148,6 @@ export default function CustomDrawerContent(props: any) {
         </View>
       </DrawerContentScrollView>
 
-      {/* フッター */}
       <View style={styles.footerSection}>
         <TouchableOpacity onPress={() => router.push('/drawer/legal')} style={styles.footerLink}>
           <Text style={styles.legalText}>利用規約・ポリシー</Text>

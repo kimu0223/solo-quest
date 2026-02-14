@@ -1,16 +1,19 @@
 {
   "expo": {
-    "name": "solo-quest",
+    "name": "Solo Quest",
     "slug": "solo-quest",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "soloquest",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.solo-quest"
+      "bundleIdentifier": "com.yourname.soloquest",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "クエストの完了報告や日々の出来事を音声で記録し、その内容をAIが鑑定・評価するためにマイクを使用します。音声によるアウトプットを通じて、お子様の言語化能力を育むことを目的としています。"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,6 +22,11 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "package": "com.yourname.soloquest",
+      "permissions": [
+        "android.permission.AUDIO_CAPTURE",
+        "android.permission.RECORD_AUDIO"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
@@ -38,6 +46,12 @@
           "dark": {
             "backgroundColor": "#000000"
           }
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "クエストの完了報告や日々の出来事を音声で記録し、その内容をAIが鑑定・評価するためにマイクを使用します。音声によるアウトプットを通じて、お子様の言語化能力を育むことを目的としています。"
         }
       ]
     ],

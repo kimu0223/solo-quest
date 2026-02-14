@@ -1,108 +1,96 @@
-import ChildLockModal from '@/components/ChildLockModal';
-import { analyzeVoiceReport } from '@/lib/gemini';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
-import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import * as FileSystem from 'expo-file-system/legacy';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   FlatList,
+  LogBox // ★追加: ログ制御用
+  ,
   Modal,
-  RefreshControl,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
-import ConfettiCannon from 'react-native-confetti-cannon';
+import * as Animatable from 'react-native-animatable';
+import CircularProgress from 'react-native-circular-progress-indicator';
+
+// ★追加: 無駄な警告ログを無視する設定
+LogBox.ignoreLogs([
+  '[Reanimated] `createAnimatedPropAdapter` is no longer necessary',
+  'Expo AV has been deprecated',
+]);
+
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
 export default function HomeScreen() {
-  const router = useRouter();
   const navigation = useNavigation();
-  const explosionRef = useRef<any>(null);
-  
-  const scaleAnim = useRef(new Animated.Value(0)).current; 
+  const router = useRouter();
 
+  // State
+  const [player, setPlayer] = useState<any>(null);
   const [quests, setQuests] = useState<any[]>([]);
+  const [nextReward, setNextReward] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
-  const [playerName, setPlayerName] = useState('勇者');
-  const [manaColor, setManaColor] = useState('#00D4FF');
-  const [playerLevel, setPlayerLevel] = useState(1);
-  const [totalXp, setTotalXp] = useState(0);
+  const [recording, setRecording] = useState<Audio.Recording | undefined>(undefined);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   
-  // ★追加: 次のご褒美情報
-  const [nextReward, setNextReward] = useState<any>(null);
-  
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [isAppraising, setIsAppraising] = useState(false);
-  const [appraisalResult, setAppraisalResult] = useState<any>(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const [showChildLock, setShowChildLock] = useState(false);
+  // AI鑑定結果用
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [aiResult, setAiResult] = useState<any>(null);
 
-  // サウンド再生関数
-  async function playSound(type: 'complete' | 'levelup') {
-    try {
-      const soundFiles: Record<string, any> = {
-        'complete': require('../../assets/sounds/complete.mp3'),
-        'levelup': require('../../assets/sounds/levelup.mp3'),
-      };
-      const soundPath = soundFiles[type];
-      if (!soundPath) return;
-      const { sound } = await Audio.Sound.createAsync(soundPath);
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
-      });
-    } catch (error) { console.log('サウンド再生スキップ:', error); }
-  }
+  useEffect(() => {
+    fetchData();
+    return () => {
+      if (recording) {
+        try { recording.stopAndUnloadAsync(); } catch (e) {}
+      }
+    };
+  }, []);
 
-  const fetchQuestsAndPlayer = useCallback(async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const storedPlayerId = await AsyncStorage.getItem('activePlayerId');
+      const activePlayerId = await AsyncStorage.getItem('activePlayerId');
+      
       let query = supabase.from('players').select('*').eq('parent_id', user.id);
-      
-      if (storedPlayerId) query = query.eq('id', storedPlayerId);
-      else query = query.order('created_at', { ascending: false }).limit(1);
-      
-      const { data: players } = await query;
-      const player = players && players.length > 0 ? players[0] : null;
+      if (activePlayerId) query = query.eq('id', activePlayerId);
+      else query = query.limit(1);
 
-      if (player) {
-        setActivePlayerId(player.id);
-        await AsyncStorage.setItem('activePlayerId', player.id);
-        setPlayerName(player.display_name || player.name);
-        setPlayerLevel(player.level);
-        setTotalXp(player.total_xp || 0);
-        setManaColor(player.mana_color || '#00D4FF');
-        
-        // クエスト取得
+      const { data: players } = await query;
+      
+      if (players && players.length > 0) {
+        const currentPlayer = players[0];
+        setPlayer(currentPlayer);
+        await AsyncStorage.setItem('activePlayerId', currentPlayer.id);
+
         const { data: questsData } = await supabase
           .from('quests')
           .select('*')
-          .eq('player_id', player.id)
+          .eq('player_id', currentPlayer.id)
           .eq('is_completed', false)
           .order('created_at', { ascending: false });
+        
         setQuests(questsData || []);
 
-        // ★追加: 次のご褒美を取得
         const { data: rewardsData } = await supabase
           .from('rewards')
           .select('*')
-          .eq('player_id', player.id)
-          .gt('target_level', player.level) // 現在のレベルより上
-          .order('target_level', { ascending: true }) // 一番近いもの
+          .eq('player_id', currentPlayer.id)
+          .gt('target_level', currentPlayer.level)
+          .order('target_level', { ascending: true })
           .limit(1);
         
         if (rewardsData && rewardsData.length > 0) {
@@ -111,263 +99,384 @@ export default function HomeScreen() {
           setNextReward(null);
         }
       }
-    } catch (e) { console.error(e); } finally { setLoading(false); }
-  }, []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  useFocusEffect(useCallback(() => { fetchQuestsAndPlayer(); }, [fetchQuestsAndPlayer]));
+  const handleCompleteQuest = async (quest: any) => {
+    Alert.alert(
+      "クエスト完了！",
+      `「${quest.title}」を完了にして、${quest.xp_reward} XPを受け取りますか？`,
+      [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "受け取る！",
+          onPress: async () => {
+            try {
+              const { error } = await supabase.from('quests').update({ is_completed: true }).eq('id', quest.id);
+              if (error) throw error;
+              await giveExperience(quest.xp_reward);
+              setQuests((prev) => prev.filter((q) => q.id !== quest.id));
+              Alert.alert("やったね！", `${quest.xp_reward} XP ゲット！`);
+            } catch (e) {
+              console.error(e);
+              Alert.alert("エラー", "通信エラーが発生しました");
+            }
+          }
+        }
+      ]
+    );
+  };
 
-  async function startRecording() {
+  const startRecording = async () => {
     try {
+      if (recording) {
+        try { await recording.stopAndUnloadAsync(); } catch (e) {}
+        setRecording(undefined);
+      }
       const permission = await Audio.requestPermissionsAsync();
       if (permission.status !== 'granted') {
-        Alert.alert("マイクの許可が必要です", "設定からマイクの使用を許可してください。");
+        Alert.alert('マイクの許可が必要です');
         return;
       }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
-    } catch (err) { console.error(err); }
-  }
-
-  async function stopAndAppraise() {
-    if (!recording) return;
-    
-    setRecording(null);
-    await recording.stopAndUnloadAsync();
-    const uri = recording.getURI();
-    
-    if (uri && activePlayerId) {
-      setIsAppraising(true);
-      try {
-        const base64Audio = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        const isRetry = retryCount > 0;
-        const result = await analyzeVoiceReport(base64Audio, "今日がんばったこと", isRetry);
-        
-        setAppraisalResult(result);
-        Animated.spring(scaleAnim, { toValue: 1, friction: 5, useNativeDriver: true }).start();
-
-        if (result.rank === 'RETRY') {
-          setRetryCount(prev => prev + 1);
-          playSound('complete');
-          setIsAppraising(false);
-          return;
-        }
-
-        setRetryCount(0);
-        const xpGained = result.xp_bonus || 0;
-        const newTotalXp = totalXp + xpGained;
-        
-        const newLevel = Math.floor(newTotalXp / 100) + 1;
-        const isLevelUp = newLevel > playerLevel;
-
-        await supabase.from('players').update({
-          total_xp: newTotalXp,
-          level: newLevel,
-        }).eq('id', activePlayerId);
-
-        await supabase.from('appraisal_logs').insert({
-          player_id: activePlayerId, 
-          transcript: result.transcript, 
-          ai_rank: result.rank, 
-          ai_comment: result.comment,
-          xp_awarded: xpGained
-        });
-
-        setTotalXp(newTotalXp);
-        setPlayerLevel(newLevel);
-
-        if (explosionRef.current) explosionRef.current.start();
-        playSound(isLevelUp ? 'levelup' : 'complete');
-
-        if (isLevelUp) {
-          Alert.alert("🎉 レベルアップ！", `Lv.${playerLevel} → Lv.${newLevel} になったぞ！`);
-          // レベルアップしたらご褒美情報も再取得すべきだが、簡易的にリロードを促す
-          fetchQuestsAndPlayer();
-        }
-
-      } catch (e) { 
-        console.error(e);
-        Alert.alert("通信エラー", "魔力が足りないようだ…（鑑定失敗）"); 
-      } finally { 
-        setIsAppraising(false); 
-      }
+      const { recording: newRecording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      setRecording(newRecording);
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Failed to start recording', err);
+      setIsRecording(false);
     }
-  }
+  };
 
-  const xpForNextLevel = 100;
-  const currentLevelXp = totalXp % xpForNextLevel;
-  const progressPercent = (currentLevelXp / xpForNextLevel) * 100;
+  const stopAndAppraise = async () => {
+    if (!recording) return;
+    setIsRecording(false);
+    setIsAnalyzing(true);
+
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(undefined);
+
+      if (!uri) throw new Error('No recording URI');
+
+      const base64Audio = await FileSystem.readAsStringAsync(uri, {
+        encoding: 'base64',
+      });
+
+      const result = await analyzeWithGemini(base64Audio);
+      
+      if (result) {
+        setAiResult(result);
+        setShowResultModal(true);
+        if (result.rank !== 'RETRY') {
+           await giveExperience(result.xp);
+        }
+      } else {
+        Alert.alert('鑑定失敗', 'うまく聞き取れませんでした。もう一度試してね！');
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (err.message && err.message.includes("deprecated")) {
+         Alert.alert("エラー", "録音データの読み込みに失敗しました。");
+      } else {
+         Alert.alert('エラー', '鑑定中に問題が発生しました。');
+      }
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const analyzeWithGemini = async (base64Audio: string) => {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{ inlineData: { mimeType: 'audio/mp4', data: base64Audio } }]
+            }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "OBJECT",
+                properties: {
+                  transcript: { type: "STRING" },
+                  rank: { type: "STRING", enum: ["S", "A", "B", "C", "RETRY"] },
+                  comment: { type: "STRING" },
+                  xp: { type: "INTEGER" }
+                }
+              }
+            },
+            systemInstruction: {
+              parts: [{ text: `
+                あなたは子供の成長を見守る冒険ギルドの鑑定士です。
+                提出された音声を聞いて、子供が「今日の出来事」や「頑張ったこと」を話していたら評価してください。
+                JSONで返してください。
+              ` }]
+            }
+          })
+        }
+      );
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message);
+      const jsonText = data.candidates[0].content.parts[0].text;
+      return JSON.parse(jsonText);
+    } catch (error) {
+      console.error("Gemini Error:", error);
+      return null;
+    }
+  };
+
+  const giveExperience = async (amount: number) => {
+    if (!player) return;
+    const newTotalXp = (player.total_xp || 0) + amount;
+    const newLevel = Math.floor(newTotalXp / 100) + 1; 
+    await supabase.from('players').update({ total_xp: newTotalXp, level: newLevel }).eq('id', player.id);
+    setPlayer({ ...player, total_xp: newTotalXp, level: newLevel });
+  };
+
+  const handleSettingsPress = () => {
+    const num1 = Math.floor(Math.random() * 9) + 1;
+    const num2 = Math.floor(Math.random() * 9) + 1;
+    
+    if (Platform.OS === 'web') {
+      const answer = window.prompt(`${num1} × ${num2} = ?`);
+      if (answer === String(num1 * num2)) {
+         router.push('/admin');
+      }
+    } else {
+      Alert.prompt(
+        "保護者確認",
+        `${num1} × ${num2} = ?`,
+        [
+          { text: "キャンセル", style: "cancel" },
+          { 
+            text: "OK", 
+            onPress: (text) => {
+              if (text === String(num1 * num2)) {
+                router.push('/admin');
+              } else {
+                Alert.alert("不正解", "大人の人に聞いてね！");
+              }
+            }
+          }
+        ],
+        "plain-text"
+      );
+    }
+  };
+
+  const manaColor = player?.mana_color || '#00D4FF';
+  const progress = (player?.total_xp % 100) || 0;
+
+  const renderListHeader = () => (
+    <View>
+      {(player?.goal_monthly || player?.goal_yearly) && (
+        <View style={styles.goalsContainer}>
+          {player?.goal_monthly ? (
+            <View style={[styles.goalCard, { borderLeftColor: manaColor }]}>
+              <Text style={styles.goalLabel}>📅 今月の目標</Text>
+              <Text style={styles.goalText}>{player.goal_monthly}</Text>
+            </View>
+          ) : null}
+          {player?.goal_yearly ? (
+            <View style={[styles.goalCard, { borderLeftColor: '#FFD700', marginTop: 8 }]}>
+              <Text style={styles.goalLabel}>🚩 今年の目標</Text>
+              <Text style={styles.goalText}>{player.goal_yearly}</Text>
+            </View>
+          ) : null}
+        </View>
+      )}
+
+      <View style={styles.xpSection}>
+        <CircularProgress
+          value={progress}
+          maxValue={100}
+          radius={70}
+          activeStrokeColor={manaColor}
+          inActiveStrokeColor={'#333'}
+          title={`${progress}%`}
+          titleColor={'#fff'}
+          titleStyle={{ fontWeight: 'bold' }}
+        />
+        <Text style={styles.nextLevelText}>次のレベルまで {100 - progress} XP</Text>
+      </View>
+
+      {nextReward && (
+        <TouchableOpacity 
+          style={[styles.nextRewardCard, { borderColor: manaColor }]}
+          onPress={() => router.push('/drawer/rewards')}
+        >
+          <View style={[styles.rewardIconBox, { backgroundColor: manaColor + '33' }]}>
+            <Text style={{ fontSize: 24 }}>🔒</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rewardLabel}>次のご褒美 (Lv.{nextReward.target_level})</Text>
+            <Text style={styles.rewardTitle}>{nextReward.title}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#666" />
+        </TouchableOpacity>
+      )}
+      
+      <Text style={styles.sectionTitle}>📜 現在のクエスト</Text>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <ConfettiCannon count={200} origin={{x: -10, y: 0}} autoStart={false} ref={explosionRef} fadeOut={true} />
-      
-      <View style={[styles.header, { backgroundColor: manaColor + '33' }]}>
+      <View style={[styles.header, { backgroundColor: manaColor + '22' }]}>
         <TouchableOpacity onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())} style={styles.iconButton}>
           <Ionicons name="menu" size={28} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>冒険の記録</Text>
-        <TouchableOpacity onPress={() => setShowChildLock(true)} style={styles.iconButton}>
-          <Ionicons name="settings-sharp" size={24} color="#fff" />
+        <View style={styles.statusBox}>
+          <Text style={styles.playerName}>{player?.display_name || '勇者'}</Text>
+          <Text style={styles.levelText}>Lv.{player?.level || 1}</Text>
+        </View>
+        <TouchableOpacity onPress={handleSettingsPress} style={styles.iconButton}>
+          <Ionicons name="settings-sharp" size={24} color="#666" />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.statusSection}>
-          <Text style={styles.heroText}>{playerName}</Text>
-          <View style={[styles.levelBadge, { backgroundColor: manaColor }]}>
-            <Text style={styles.levelText}>Lv.{playerLevel}</Text>
+      <FlatList
+        data={quests}
+        keyExtractor={(item) => item.id}
+        refreshing={loading}
+        onRefresh={fetchData}
+        ListHeaderComponent={renderListHeader}
+        renderItem={({ item }) => (
+          <View style={styles.questCard}>
+            <View style={[styles.questIcon, { backgroundColor: manaColor }]}>
+              <Ionicons name="document-text" size={24} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.questTitle}>{item.title}</Text>
+              <Text style={styles.questXp}>報酬: {item.xp_reward} XP</Text>
+            </View>
+            
+            <TouchableOpacity onPress={() => handleCompleteQuest(item)} style={styles.checkButton}>
+              <Ionicons name="ellipse-outline" size={32} color="#666" />
+            </TouchableOpacity>
           </View>
-        </View>
-        
-        <View style={styles.xpBarContainer}>
-          <Text style={styles.xpText}>あと {xpForNextLevel - currentLevelXp} XP でレベルアップ</Text>
-          <View style={styles.xpBarBackground}>
-            <View style={[styles.xpBarFill, { width: `${progressPercent}%`, backgroundColor: manaColor }]} />
+        )}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>現在クエストはありません</Text>
+            <Text style={styles.emptySubText}>今日の冒険を報告してみよう！</Text>
           </View>
-        </View>
+        }
+        contentContainerStyle={{ paddingBottom: 120 }}
+      />
 
-        {/* ★追加: 次のご褒美表示エリア */}
-        {nextReward && (
-          <TouchableOpacity 
-            style={[styles.nextRewardCard, { borderColor: manaColor }]}
-            onPress={() => router.push('/drawer/rewards')}
+      <View style={styles.micContainer}>
+        {isAnalyzing ? (
+           <ActivityIndicator size="large" color={manaColor} />
+        ) : (
+          <TouchableOpacity
+            style={[styles.micButton, isRecording && styles.micButtonActive]}
+            onPress={isRecording ? stopAndAppraise : startRecording}
           >
-            <View style={styles.nextRewardIcon}>
-              <Text style={{fontSize: 20}}>🎁</Text>
-            </View>
-            <View style={{flex: 1}}>
-              <Text style={styles.nextRewardLabel}>次のご褒美 (Lv.{nextReward.target_level})</Text>
-              <Text style={styles.nextRewardTitle} numberOfLines={1}>{nextReward.title}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name={isRecording ? "stop" : "mic"} size={40} color="#fff" />
           </TouchableOpacity>
         )}
-
-        <View style={styles.aiSection}>
-          <Text style={styles.aiLabel}>✨ 声で報告してXPゲット！</Text>
-          <TouchableOpacity 
-            style={[styles.micButton, recording ? styles.micActive : { borderColor: manaColor }]}
-            onPressIn={startRecording}
-            onPressOut={stopAndAppraise}
-            disabled={isAppraising}
-          >
-            {isAppraising ? (
-              <ActivityIndicator color={manaColor} size="large" />
-            ) : (
-              <Ionicons name={recording ? "stop-circle" : "mic"} size={40} color={recording ? "#FF3131" : manaColor} />
-            )}
-          </TouchableOpacity>
-          <Text style={styles.micHint}>
-            {recording ? "はなしてね..." : isAppraising ? "鑑定中..." : "ボタンを押して「やったこと」を話そう"}
-          </Text>
-        </View>
-
-        <Text style={styles.sectionHeader}>現在のクエスト</Text>
-        <FlatList
-          data={quests}
-          keyExtractor={(item) => item.id}
-          ListEmptyComponent={<Text style={styles.emptyText}>クエストはありません。ゆっくり休もう。</Text>}
-          renderItem={({ item }) => (
-            <View style={styles.questCard}>
-              <Text style={styles.questTitle}>{item.title}</Text>
-              <Ionicons name="ellipse-outline" size={24} color={manaColor} />
-            </View>
-          )}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchQuestsAndPlayer} />}
-        />
+        <Text style={styles.micText}>
+          {isAnalyzing ? "鑑定中..." : isRecording ? "お話し中... (タップで終了)" : "タップして報告する"}
+        </Text>
       </View>
 
-      <Modal visible={!!appraisalResult} transparent animationType="none">
+      <Modal visible={showResultModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <Animated.View style={[styles.modalContent, { transform: [{ scale: scaleAnim }] }]}>
-            <Text style={styles.rankTitle}>AI鑑定結果</Text>
-            
-            <View style={[styles.rankCircle, appraisalResult?.rank === 'RETRY' && { borderColor: '#FFA500' }]}>
-              <Text style={[styles.rankText, { color: appraisalResult?.rank === 'RETRY' ? '#FFA500' : manaColor }]}>
-                {appraisalResult?.rank === 'RETRY' ? '?' : appraisalResult?.rank}
-              </Text>
+          <Animatable.View animation="bounceIn" style={styles.resultCard}>
+            <Text style={styles.resultTitle}>鑑定結果！</Text>
+            <View style={[styles.rankBadge, { backgroundColor: aiResult?.rank === 'S' ? '#FFD700' : manaColor }]}>
+              <Text style={styles.rankText}>{aiResult?.rank}</Text>
             </View>
-            
-            <Text style={styles.commentText}>{appraisalResult?.comment}</Text>
-            
-            {appraisalResult?.rank !== 'RETRY' && (
-              <View style={styles.xpReward}>
-                <Text style={styles.xpLabel}>獲得XP</Text>
-                <Text style={styles.xpValue}>+{appraisalResult?.xp_bonus}</Text>
-              </View>
+            <Text style={styles.commentText}>"{aiResult?.comment}"</Text>
+            {aiResult?.rank !== 'RETRY' && (
+              <Text style={styles.xpAwardText}>+ {aiResult?.xp} XP ゲット！</Text>
             )}
-
             <TouchableOpacity 
-              style={[styles.closeBtn, { backgroundColor: appraisalResult?.rank === 'RETRY' ? '#FFA500' : manaColor }]} 
-              onPress={() => {
-                setAppraisalResult(null);
-                scaleAnim.setValue(0);
-              }}
+              style={[styles.closeButton, { backgroundColor: manaColor }]} 
+              onPress={() => setShowResultModal(false)}
             >
-              <Text style={styles.closeBtnText}>
-                {appraisalResult?.rank === 'RETRY' ? 'もう一度！' : '閉じる'}
-              </Text>
+              <Text style={styles.closeButtonText}>やったね！</Text>
             </TouchableOpacity>
-          </Animated.View>
+          </Animatable.View>
         </View>
       </Modal>
 
-      <ChildLockModal 
-        visible={showChildLock}
-        onClose={() => setShowChildLock(false)}
-        onSuccess={() => {
-          setShowChildLock(false);
-          router.push('/admin');
-        }}
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#121212' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 60, paddingHorizontal: 20, paddingBottom: 20 },
-  headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  header: {
+    paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderBottomWidth: 1, borderBottomColor: '#333'
+  },
+  statusBox: { alignItems: 'center' },
+  playerName: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  levelText: { color: '#FFD700', fontSize: 20, fontWeight: '900' },
   iconButton: { padding: 8 },
-  content: { flex: 1, padding: 20 },
-  statusSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
-  heroText: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginRight: 10 },
-  levelBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-  levelText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
-  xpBarContainer: { marginBottom: 15 }, // 少し詰めました
-  xpText: { color: '#888', fontSize: 12, marginBottom: 5, textAlign: 'right' },
-  xpBarBackground: { height: 12, backgroundColor: '#333', borderRadius: 6, overflow: 'hidden' },
-  xpBarFill: { height: '100%', borderRadius: 6 },
-  
-  // ★追加スタイル: 次のご褒美カード
-  nextRewardCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E1E2E', padding: 12, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderStyle: 'dashed' },
-  nextRewardIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  nextRewardLabel: { color: '#aaa', fontSize: 10, fontWeight: 'bold', marginBottom: 2 },
-  nextRewardTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
 
-  aiSection: { alignItems: 'center', backgroundColor: '#1A1A2E', borderRadius: 20, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: '#333' },
-  aiLabel: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 20 },
-  micButton: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A0A15', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 5, elevation: 8 },
-  micActive: { borderColor: '#FF3131', backgroundColor: '#300' },
-  micHint: { color: '#888', fontSize: 12, marginTop: 15 },
-  sectionHeader: { color: '#aaa', fontSize: 14, fontWeight: 'bold', marginBottom: 10, marginTop: 10 },
-  questCard: { backgroundColor: '#1E1E2E', padding: 16, borderRadius: 12, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderLeftWidth: 4, borderLeftColor: '#333' },
-  questTitle: { color: '#fff', fontSize: 16 },
-  emptyText: { color: '#555', textAlign: 'center', marginTop: 20, fontStyle: 'italic' },
-  
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '85%', backgroundColor: '#1E1E2E', borderRadius: 24, padding: 30, alignItems: 'center', borderWidth: 1, borderColor: '#444' },
-  rankTitle: { color: '#aaa', fontSize: 14, marginBottom: 10, letterSpacing: 2 },
-  rankCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 2, borderColor: '#fff' },
-  rankText: { fontSize: 48, fontWeight: '900', textShadowColor: 'rgba(255, 255, 255, 0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
-  commentText: { fontSize: 18, textAlign: 'center', color: '#fff', marginBottom: 20, lineHeight: 26, fontWeight: 'bold' },
-  xpReward: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 30, backgroundColor: '#333', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 10 },
-  xpLabel: { color: '#aaa', fontSize: 14, marginRight: 8 },
-  xpValue: { color: '#FFD700', fontSize: 24, fontWeight: 'bold' },
-  closeBtn: { paddingHorizontal: 50, paddingVertical: 14, borderRadius: 30 },
-  closeBtnText: { color: '#000', fontWeight: 'bold', fontSize: 16 }
+  goalsContainer: { marginHorizontal: 20, marginTop: 20 },
+  goalCard: { backgroundColor: '#1E1E2E', padding: 12, borderRadius: 8, borderLeftWidth: 4 },
+  goalLabel: { color: '#999', fontSize: 11, fontWeight: 'bold', marginBottom: 2 },
+  goalText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+
+  xpSection: { alignItems: 'center', marginVertical: 20 },
+  nextLevelText: { color: '#888', marginTop: 10, fontSize: 12 },
+
+  nextRewardCard: { 
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E1E2E', 
+    marginHorizontal: 20, marginBottom: 20, padding: 12, borderRadius: 12, 
+    borderWidth: 1, gap: 12 
+  },
+  rewardIconBox: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  rewardLabel: { color: '#888', fontSize: 10, fontWeight: 'bold' },
+  rewardTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+
+  sectionTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginHorizontal: 20, marginBottom: 10 },
+
+  questCard: {
+    backgroundColor: '#1E1E2E', marginHorizontal: 20, marginBottom: 10, padding: 15,
+    borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 15
+  },
+  questIcon: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
+  questTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  questXp: { color: '#aaa', fontSize: 12 },
+  checkButton: { padding: 5 },
+
+  emptyContainer: { alignItems: 'center', marginTop: 20 },
+  emptyText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  emptySubText: { color: '#666', marginTop: 5 },
+
+  micContainer: {
+    position: 'absolute', bottom: 30, left: 0, right: 0, alignItems: 'center'
+  },
+  micButton: {
+    width: 80, height: 80, borderRadius: 40, backgroundColor: '#00D4FF',
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: "#00D4FF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 10
+  },
+  micButtonActive: { backgroundColor: '#FF3131', transform: [{ scale: 1.1 }] },
+  micText: { color: '#ccc', marginTop: 10, fontSize: 12 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
+  resultCard: { width: '85%', backgroundColor: '#fff', borderRadius: 20, padding: 30, alignItems: 'center' },
+  resultTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
+  rankBadge: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  rankText: { fontSize: 40, fontWeight: '900', color: '#fff' },
+  commentText: { fontSize: 16, textAlign: 'center', marginBottom: 20, color: '#333' },
+  xpAwardText: { fontSize: 20, fontWeight: 'bold', color: '#00D4FF', marginBottom: 30 },
+  closeButton: { paddingHorizontal: 40, paddingVertical: 15, borderRadius: 30 },
+  closeButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });

@@ -1,69 +1,53 @@
 import CustomDrawerContent from '@/components/CustomDrawerContent';
-import { Ionicons } from '@expo/vector-icons';
 import { Drawer } from 'expo-router/drawer';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-
-const COLORS = {
-  background: '#0A0A15',
-  primary: '#00D4FF',
-  text: '#FFFFFF',
-};
 
 export default function DrawerLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Drawer
+        // カスタムメニュー（アイコンや勇者切り替え）を使用
         drawerContent={(props) => <CustomDrawerContent {...props} />}
         screenOptions={{
           headerShown: false,
           drawerStyle: {
-            backgroundColor: COLORS.background,
+            backgroundColor: '#0A0A15',
             width: 280,
           },
-          drawerActiveTintColor: COLORS.primary,
-          drawerInactiveTintColor: COLORS.text,
-          drawerLabelStyle: {
-            fontFamily: 'Orbitron_400Regular',
-            fontSize: 14,
-            marginLeft: 0,
-          },
-          drawerItemStyle: {
-            paddingLeft: 10,
-          }
+          drawerActiveBackgroundColor: 'rgba(0, 212, 255, 0.1)',
+          drawerActiveTintColor: '#00D4FF',
+          drawerInactiveTintColor: '#A0A0A0',
         }}
       >
         <Drawer.Screen
           name="index"
           options={{
-            drawerLabel: 'HOME (冒険)',
-            drawerIcon: ({ color }) => <Ionicons name="game-controller-outline" size={22} color={color} />,
+            drawerLabel: 'ホーム',
+            title: 'ホーム',
           }}
         />
         <Drawer.Screen
           name="rewards"
           options={{
-            drawerLabel: 'TREASURY (ご褒美)',
-            drawerIcon: ({ color }) => <Ionicons name="gift-outline" size={22} color={color} />,
+            drawerLabel: 'ご褒美の宝物庫',
+            title: 'ご褒美',
           }}
         />
         <Drawer.Screen
           name="profile"
           options={{
-            drawerLabel: 'HERO DATA (データ)',
-            drawerIcon: ({ color }) => <Ionicons name="person-outline" size={22} color={color} />,
+            drawerLabel: 'ギルドカード',
+            title: 'プロフィール',
           }}
         />
         
-        {/* ▼▼▼ 修正: メニューリストからは隠す（CustomDrawerContent側で手動配置するため） ▼▼▼ */}
+        {/* ★修正: ファイルは存在するが、メニューリストからは隠す設定 */}
         <Drawer.Screen
           name="legal"
           options={{
-            drawerLabel: 'RULES (規約)',
-            drawerIcon: ({ color }) => <Ionicons name="document-text-outline" size={22} color={color} />,
-            drawerItemStyle: { display: 'none' } // ← これでリストから消えます
+            drawerItemStyle: { display: 'none' }
           }}
         />
-        
       </Drawer>
     </GestureHandlerRootView>
   );
