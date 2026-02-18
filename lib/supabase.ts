@@ -1,15 +1,36 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
-import 'react-native-url-polyfill/auto';
+import { Platform } from 'react-native'; // ★追加
+import 'react-native-url-polyfill/auto'; // 今のコードにあるこれも残します
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-// ★重要: これがモバイルアプリにおける「完成形」の設定です。
-// auth.storage に AsyncStorage を渡すことで、アプリを再起動してもログインが維持されます。
+// ★追加: Expoが裏でWebのチェックをしてクラッシュするのを防ぐ「お守り」
+const CustomStorage = {
+  getItem: async (key: string) => {
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
+      return null;
+    }
+    return AsyncStorage.getItem(key);
+  },
+  setItem: async (key: string, value: string) => {
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
+      return;
+    }
+    return AsyncStorage.setItem(key, value);
+  },
+  removeItem: async (key: string) => {
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
+      return;
+    }
+    return AsyncStorage.removeItem(key);
+  },
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
+    storage: CustomStorage, // ★ AsyncStorage から CustomStorage に変更
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

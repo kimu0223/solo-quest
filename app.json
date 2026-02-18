@@ -6,11 +6,11 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "soloquest",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourname.soloquest",
+      "bundleIdentifier": "com.kimu.soloquest",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "クエストの完了報告や日々の出来事を音声で記録し、その内容をAIが鑑定・評価するためにマイクを使用します。音声によるアウトプットを通じて、お子様の言語化能力を育むことを目的としています。"
       }
@@ -22,7 +22,7 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "package": "com.yourname.soloquest",
+      "package": "com.kimu.soloquest",
       "permissions": [
         "android.permission.AUDIO_CAPTURE",
         "android.permission.RECORD_AUDIO"
@@ -31,7 +31,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -44,7 +44,7 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#ffffff"
           }
         }
       ],

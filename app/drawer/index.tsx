@@ -10,8 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  LogBox // ★追加: ログ制御用
-  ,
+  LogBox,
   Modal,
   Platform,
   StyleSheet,
@@ -22,13 +21,13 @@ import {
 import * as Animatable from 'react-native-animatable';
 import CircularProgress from 'react-native-circular-progress-indicator';
 
-// ★追加: 無駄な警告ログを無視する設定
 LogBox.ignoreLogs([
   '[Reanimated] `createAnimatedPropAdapter` is no longer necessary',
   'Expo AV has been deprecated',
 ]);
 
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+const DAILY_LIMIT = 3;
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -44,12 +43,13 @@ export default function HomeScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
-  // AI鑑定結果用
   const [showResultModal, setShowResultModal] = useState(false);
   const [aiResult, setAiResult] = useState<any>(null);
+  const [dailyCount, setDailyCount] = useState(0);
 
   useEffect(() => {
     fetchData();
+    checkDailyLimit();
     return () => {
       if (recording) {
         try { recording.stopAndUnloadAsync(); } catch (e) {}
@@ -106,6 +106,34 @@ export default function HomeScreen() {
     }
   };
 
+  const checkDailyLimit = async () => {
+    try {
+      const today = new Date().toDateString();
+      const savedDate = await AsyncStorage.getItem('lastUsageDate');
+      const savedCount = await AsyncStorage.getItem('dailyUsageCount');
+
+      if (savedDate !== today) {
+        await AsyncStorage.setItem('lastUsageDate', today);
+        await AsyncStorage.setItem('dailyUsageCount', '0');
+        setDailyCount(0);
+      } else {
+        setDailyCount(parseInt(savedCount || '0', 10));
+      }
+    } catch (e) {
+      console.error("Limit check error:", e);
+    }
+  };
+
+  const incrementDailyCount = async () => {
+    try {
+      const newCount = dailyCount + 1;
+      setDailyCount(newCount);
+      await AsyncStorage.setItem('dailyUsageCount', newCount.toString());
+    } catch (e) {
+      console.error("Increment error:", e);
+    }
+  };
+
   const handleCompleteQuest = async (quest: any) => {
     Alert.alert(
       "クエスト完了！",
@@ -132,6 +160,15 @@ export default function HomeScreen() {
   };
 
   const startRecording = async () => {
+    if (dailyCount >= DAILY_LIMIT) {
+      Alert.alert(
+        "本日の回数終了",
+        "無料プランでは1日3回までです。\nプレミアムプランで無制限に話そう！\n（※現在は開発中につき制限のみ動作します）",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
     try {
       if (recording) {
         try { await recording.stopAndUnloadAsync(); } catch (e) {}
@@ -167,6 +204,8 @@ export default function HomeScreen() {
       const base64Audio = await FileSystem.readAsStringAsync(uri, {
         encoding: 'base64',
       });
+
+      await incrementDailyCount();
 
       const result = await analyzeWithGemini(base64Audio);
       
@@ -301,12 +340,15 @@ export default function HomeScreen() {
           maxValue={100}
           radius={70}
           activeStrokeColor={manaColor}
-          inActiveStrokeColor={'#333'}
+          inActiveStrokeColor={'#E0E0E0'} // グレーに変更
           title={`${progress}%`}
-          titleColor={'#fff'}
+          titleColor={'#333'} // 黒に変更
           titleStyle={{ fontWeight: 'bold' }}
         />
         <Text style={styles.nextLevelText}>次のレベルまで {100 - progress} XP</Text>
+        <Text style={styles.limitText}>
+           本日の鑑定可能回数: {Math.max(0, DAILY_LIMIT - dailyCount)} / {DAILY_LIMIT}
+        </Text>
       </View>
 
       {nextReward && (
@@ -321,7 +363,7 @@ export default function HomeScreen() {
             <Text style={styles.rewardLabel}>次のご褒美 (Lv.{nextReward.target_level})</Text>
             <Text style={styles.rewardTitle}>{nextReward.title}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#666" />
+          <Ionicons name="chevron-forward" size={20} color="#999" />
         </TouchableOpacity>
       )}
       
@@ -331,9 +373,9 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { backgroundColor: manaColor + '22' }]}>
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())} style={styles.iconButton}>
-          <Ionicons name="menu" size={28} color="#fff" />
+          <Ionicons name="menu" size={28} color="#333" />
         </TouchableOpacity>
         <View style={styles.statusBox}>
           <Text style={styles.playerName}>{player?.display_name || '勇者'}</Text>
@@ -359,9 +401,8 @@ export default function HomeScreen() {
               <Text style={styles.questTitle}>{item.title}</Text>
               <Text style={styles.questXp}>報酬: {item.xp_reward} XP</Text>
             </View>
-            
             <TouchableOpacity onPress={() => handleCompleteQuest(item)} style={styles.checkButton}>
-              <Ionicons name="ellipse-outline" size={32} color="#666" />
+              <Ionicons name="ellipse-outline" size={32} color="#ccc" />
             </TouchableOpacity>
           </View>
         )}
@@ -379,7 +420,7 @@ export default function HomeScreen() {
            <ActivityIndicator size="large" color={manaColor} />
         ) : (
           <TouchableOpacity
-            style={[styles.micButton, isRecording && styles.micButtonActive]}
+            style={[styles.micButton, isRecording && styles.micButtonActive, dailyCount >= DAILY_LIMIT && styles.micButtonDisabled]} 
             onPress={isRecording ? stopAndAppraise : startRecording}
           >
             <Ionicons name={isRecording ? "stop" : "mic"} size={40} color="#fff" />
@@ -416,48 +457,59 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212' },
+  // 背景色を白に変更
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  
   header: {
     paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderBottomWidth: 1, borderBottomColor: '#333'
+    backgroundColor: '#fff',
+    borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 2
   },
   statusBox: { alignItems: 'center' },
-  playerName: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  playerName: { color: '#333', fontSize: 16, fontWeight: 'bold' },
   levelText: { color: '#FFD700', fontSize: 20, fontWeight: '900' },
   iconButton: { padding: 8 },
 
   goalsContainer: { marginHorizontal: 20, marginTop: 20 },
-  goalCard: { backgroundColor: '#1E1E2E', padding: 12, borderRadius: 8, borderLeftWidth: 4 },
+  goalCard: { 
+    backgroundColor: '#fff', padding: 15, borderRadius: 12, borderLeftWidth: 4,
+    marginBottom: 8,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1
+  },
   goalLabel: { color: '#999', fontSize: 11, fontWeight: 'bold', marginBottom: 2 },
-  goalText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  goalText: { color: '#333', fontSize: 14, fontWeight: 'bold' },
 
   xpSection: { alignItems: 'center', marginVertical: 20 },
   nextLevelText: { color: '#888', marginTop: 10, fontSize: 12 },
+  limitText: { color: '#ff4500', marginTop: 5, fontSize: 12, fontWeight: 'bold' },
 
   nextRewardCard: { 
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E1E2E', 
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', 
     marginHorizontal: 20, marginBottom: 20, padding: 12, borderRadius: 12, 
-    borderWidth: 1, gap: 12 
+    borderWidth: 1, gap: 12,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1
   },
   rewardIconBox: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   rewardLabel: { color: '#888', fontSize: 10, fontWeight: 'bold' },
-  rewardTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  rewardTitle: { color: '#333', fontSize: 14, fontWeight: 'bold' },
 
-  sectionTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginHorizontal: 20, marginBottom: 10 },
+  sectionTitle: { color: '#333', fontSize: 18, fontWeight: 'bold', marginHorizontal: 20, marginBottom: 10 },
 
   questCard: {
-    backgroundColor: '#1E1E2E', marginHorizontal: 20, marginBottom: 10, padding: 15,
-    borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 15
+    backgroundColor: '#fff', marginHorizontal: 20, marginBottom: 10, padding: 15,
+    borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 15,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
   },
   questIcon: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
-  questTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  questXp: { color: '#aaa', fontSize: 12 },
+  questTitle: { color: '#333', fontSize: 16, fontWeight: 'bold' },
+  questXp: { color: '#888', fontSize: 12 },
   checkButton: { padding: 5 },
 
   emptyContainer: { alignItems: 'center', marginTop: 20 },
-  emptyText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  emptySubText: { color: '#666', marginTop: 5 },
+  emptyText: { color: '#333', fontSize: 16, fontWeight: 'bold' },
+  emptySubText: { color: '#999', marginTop: 5 },
 
   micContainer: {
     position: 'absolute', bottom: 30, left: 0, right: 0, alignItems: 'center'
@@ -465,17 +517,18 @@ const styles = StyleSheet.create({
   micButton: {
     width: 80, height: 80, borderRadius: 40, backgroundColor: '#00D4FF',
     justifyContent: 'center', alignItems: 'center',
-    shadowColor: "#00D4FF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 10
+    shadowColor: "#00D4FF", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10
   },
   micButtonActive: { backgroundColor: '#FF3131', transform: [{ scale: 1.1 }] },
-  micText: { color: '#ccc', marginTop: 10, fontSize: 12 },
+  micButtonDisabled: { backgroundColor: '#ccc', opacity: 0.7 }, 
+  micText: { color: '#666', marginTop: 10, fontSize: 12, fontWeight: 'bold' },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
-  resultCard: { width: '85%', backgroundColor: '#fff', borderRadius: 20, padding: 30, alignItems: 'center' },
-  resultTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  resultCard: { width: '85%', backgroundColor: '#fff', borderRadius: 24, padding: 30, alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  resultTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, color: '#333' },
   rankBadge: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   rankText: { fontSize: 40, fontWeight: '900', color: '#fff' },
-  commentText: { fontSize: 16, textAlign: 'center', marginBottom: 20, color: '#333' },
+  commentText: { fontSize: 16, textAlign: 'center', marginBottom: 20, color: '#333', lineHeight: 24 },
   xpAwardText: { fontSize: 20, fontWeight: 'bold', color: '#00D4FF', marginBottom: 30 },
   closeButton: { paddingHorizontal: 40, paddingVertical: 15, borderRadius: 30 },
   closeButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },

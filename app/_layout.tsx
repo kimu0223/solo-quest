@@ -4,9 +4,9 @@ import { Drawer } from 'expo-router/drawer';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const COLORS = {
-  background: '#0A0A15',
+  background: '#FFFFFF',
   primary: '#00D4FF',
-  text: '#FFFFFF',
+  text: '#333333',
 };
 
 export default function DrawerLayout() {
@@ -21,48 +21,48 @@ export default function DrawerLayout() {
             width: 280,
           },
           drawerActiveTintColor: COLORS.primary,
-          drawerInactiveTintColor: COLORS.text,
+          drawerInactiveTintColor: '#999999',
           drawerLabelStyle: {
-            fontFamily: 'Orbitron_400Regular',
             fontSize: 14,
-            marginLeft: 0, // ▼修正：-20から0に変更（重なり解消）
+            marginLeft: 0,
+            fontWeight: '600'
           },
           drawerItemStyle: {
-            paddingLeft: 10, // アイコン周りの余白確保
-          }
+            paddingLeft: 10,
+            borderRadius: 8,
+          },
+          drawerActiveBackgroundColor: '#F0F9FF', 
         }}
       >
         <Drawer.Screen
           name="index"
           options={{
-            drawerLabel: 'HOME (冒険)',
+            drawerLabel: 'ホーム (冒険)',
             drawerIcon: ({ color }) => <Ionicons name="game-controller-outline" size={22} color={color} />,
           }}
         />
         <Drawer.Screen
           name="rewards"
           options={{
-            drawerLabel: 'TREASURY (ご褒美)',
+            drawerLabel: 'ご褒美の宝物庫',
             drawerIcon: ({ color }) => <Ionicons name="gift-outline" size={22} color={color} />,
           }}
         />
         <Drawer.Screen
           name="profile"
           options={{
-            drawerLabel: 'HERO DATA (データ)',
+            drawerLabel: 'ギルドカード',
             drawerIcon: ({ color }) => <Ionicons name="person-outline" size={22} color={color} />,
           }}
         />
-        
-        {/* ▼▼▼ 追加: 規約ページ ▼▼▼ */}
         <Drawer.Screen
           name="legal"
           options={{
-            drawerLabel: 'RULES (規約)',
+            drawerLabel: '規約・設定',
             drawerIcon: ({ color }) => <Ionicons name="document-text-outline" size={22} color={color} />,
+            drawerItemStyle: { display: 'none' } 
           }}
         />
-        
       </Drawer>
     </GestureHandlerRootView>
   );
