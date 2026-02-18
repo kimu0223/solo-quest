@@ -7,13 +7,13 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+// ★変更: ダークネイビーの世界観に色を統一（60:30:10の法則に則る）
 const COLORS = {
-  background: '#FFFFFF',
-  primary: '#00D4FF',
-  text: '#333333',
-  subText: '#666666',
-  border: '#EEEEEE',
-  activeBg: '#F0F9FF',
+  background: '#0A0A15', // 深いダークネイビー
+  cardBg: '#12121A',     // カードやボタンの背景用
+  text: '#FFFFFF',       // 白文字
+  subText: '#888899',    // 補助テキスト（少し青みがかったグレー）
+  border: '#1E1E2E',     // 境界線もネイビー系
 };
 
 type Player = {
@@ -23,6 +23,9 @@ type Player = {
 };
 
 export default function CustomDrawerContent(props: any) {
+  // 親(_layout.tsx)から受け取った themeColor を使う。無ければデフォルトの水色
+  const { themeColor = '#00D4FF', ...drawerProps } = props;
+  
   const router = useRouter();
   const [players, setPlayers] = useState<Player[]>([]);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
@@ -96,18 +99,22 @@ export default function CustomDrawerContent(props: any) {
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       
       <View style={styles.header}>
-        <View style={styles.logoCircle}>
-          <Ionicons name="shield-checkmark" size={32} color={COLORS.primary} />
+        <View style={[styles.logoCircle, { backgroundColor: themeColor + '1A' }]}>
+          <Ionicons name="shield-checkmark" size={32} color={themeColor} />
         </View>
         <View>
           <Text style={styles.title}>SOLO QUEST</Text>
-          <Text style={styles.subtitle}>GUILD MENU</Text>
+          <Text style={[styles.subtitle, { color: themeColor }]}>GUILD MENU</Text>
         </View>
       </View>
 
-      <DrawerContentScrollView {...props} contentContainerStyle={{ paddingTop: 0 }}>
+      <DrawerContentScrollView {...drawerProps} contentContainerStyle={{ paddingTop: 0 }}>
         <View style={styles.menuList}>
-          <DrawerItemList {...props} />
+          <DrawerItemList 
+            {...drawerProps} 
+            activeTintColor={themeColor}
+            activeBackgroundColor={themeColor + '1A'}
+          />
         </View>
 
         <View style={styles.divider} />
@@ -119,16 +126,20 @@ export default function CustomDrawerContent(props: any) {
             return (
               <TouchableOpacity
                 key={player.id}
-                style={[styles.playerItem, isActive && styles.activePlayerItem]}
+                style={[
+                  styles.playerItem, 
+                  isActive && { backgroundColor: themeColor + '1A', borderColor: themeColor }
+                ]}
                 onPress={() => handleSwitchPlayer(player.id)}
               >
+                {/* プレイヤーアイコンの色は背景が暗いため黒に変更 */}
                 <View style={[styles.playerAvatar, { backgroundColor: player.mana_color || '#ccc' }]}>
-                  <Ionicons name="person" size={14} color="#fff" />
+                  <Ionicons name="person" size={14} color="#000" /> 
                 </View>
                 <Text style={[styles.playerName, isActive && styles.activePlayerName]}>
                   {player.name}
                 </Text>
-                {isActive && <Ionicons name="checkmark-circle" size={16} color={COLORS.primary} style={{ marginLeft: 'auto' }} />}
+                {isActive && <Ionicons name="checkmark-circle" size={16} color={themeColor} style={{ marginLeft: 'auto' }} />}
               </TouchableOpacity>
             );
           })}
@@ -156,6 +167,7 @@ export default function CustomDrawerContent(props: any) {
   );
 }
 
+// ★背景の変更に合わせて色を調整
 const styles = StyleSheet.create({
   header: { 
     padding: 20, 
@@ -170,19 +182,18 @@ const styles = StyleSheet.create({
     width: 50, 
     height: 50, 
     borderRadius: 25, 
-    backgroundColor: '#F0F9FF', 
     justifyContent: 'center', 
     alignItems: 'center', 
     marginRight: 15,
   },
   title: { color: COLORS.text, fontSize: 18, fontWeight: 'bold', letterSpacing: 1 },
-  subtitle: { color: COLORS.primary, fontSize: 10, letterSpacing: 2 },
+  subtitle: { fontSize: 10, letterSpacing: 2, fontWeight: 'bold' },
   
   menuList: { paddingHorizontal: 10 },
   divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 15, marginHorizontal: 20 },
 
   switchSection: { paddingHorizontal: 20 },
-  sectionLabel: { color: '#999', fontSize: 12, marginBottom: 10, fontWeight: 'bold' },
+  sectionLabel: { color: COLORS.subText, fontSize: 12, marginBottom: 10, fontWeight: 'bold' },
   
   playerItem: { 
     flexDirection: 'row', 
@@ -190,13 +201,9 @@ const styles = StyleSheet.create({
     padding: 12, 
     borderRadius: 12, 
     marginBottom: 8,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.cardBg, // カード背景色に
     borderWidth: 1,
     borderColor: 'transparent'
-  },
-  activePlayerItem: { 
-    backgroundColor: COLORS.activeBg,
-    borderColor: COLORS.primary
   },
   playerAvatar: { 
     width: 24, 
@@ -210,12 +217,17 @@ const styles = StyleSheet.create({
   activePlayerName: { color: COLORS.text, fontWeight: 'bold' },
   
   addBtn: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingVertical: 8 },
-  addIconCircle: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-  addText: { color: '#666', fontSize: 14 },
+  addIconCircle: { 
+    width: 30, height: 30, borderRadius: 15, 
+    backgroundColor: COLORS.cardBg, // ダークな背景に
+    borderWidth: 1, borderColor: COLORS.border,
+    justifyContent: 'center', alignItems: 'center', marginRight: 10 
+  },
+  addText: { color: COLORS.subText, fontSize: 14 },
   
   footerSection: { padding: 20, borderTopWidth: 1, borderTopColor: COLORS.border },
   footerLink: { marginBottom: 15 },
-  legalText: { color: '#888', fontSize: 12 },
+  legalText: { color: COLORS.subText, fontSize: 12 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center' },
   logoutText: { color: '#FF3131', marginLeft: 10, fontWeight: 'bold' },
 });
