@@ -179,7 +179,8 @@ export default function AdminDashboard() {
     <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          {/* ★修正箇所：router.back() をやめて、明示的に /drawer に遷移させる */}
+          <TouchableOpacity onPress={() => router.replace('/drawer')} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>ギルド管理画面</Text>

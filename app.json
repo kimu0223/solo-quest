@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.kimu.soloquest",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "クエストの完了報告や日々の出来事を音声で記録し、その内容をAIが鑑定・評価するためにマイクを使用します。音声によるアウトプットを通じて、お子様の言語化能力を育むことを目的としています。"
+        "NSMicrophoneUsageDescription": "クエストの完了報告や日々の出来事を音声で記録し、その内容をAIが鑑定・評価するためにマイクを使用します。音声によるアウトプットを通じて、お子様の言語化能力を育むことを目的としています。",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -25,7 +26,8 @@
       "package": "com.kimu.soloquest",
       "permissions": [
         "android.permission.AUDIO_CAPTURE",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -58,6 +60,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "edb3c9e5-d91c-4819-aa64-90eb6278f91a"
+      }
     }
   }
 }
