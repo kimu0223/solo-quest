@@ -407,7 +407,11 @@ export default function HomeScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.questTitle}>{item.title}</Text>
-              <Text style={styles.questXp}>報酬: {item.xp_reward} XP</Text>
+              {/* ★ここが変更点！時間の表示を追加しました */}
+              <Text style={styles.questXp}>
+                報酬: {item.xp_reward} XP
+                {item.time_limit ? ` / ⏳ 目標: ${item.time_limit}分` : ''}
+              </Text>
             </View>
             <TouchableOpacity onPress={() => handleCompleteQuest(item)} style={styles.checkButton}>
               <Ionicons name="ellipse-outline" size={32} color={COLORS.subText} />
