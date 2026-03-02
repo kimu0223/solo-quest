@@ -6,7 +6,9 @@ import { ActivityIndicator, View } from 'react-native';
 
 export default function Index() {
   const [isLoading, setIsLoading] = useState(true);
-  const [initialRoute, setInitialRoute] = useState<'/auth/login' | '/drawer' | '/onboarding'>('/auth/login');
+  
+  // ★変更箇所1：型に '/welcome' を追加し、初期値を '/welcome' に変更
+  const [initialRoute, setInitialRoute] = useState<'/welcome' | '/auth/login' | '/drawer' | '/onboarding'>('/welcome');
 
   useEffect(() => {
     checkAuth();
@@ -14,11 +16,11 @@ export default function Index() {
 
   const checkAuth = async () => {
     try {
-      // 1. セッションがあるか確認
+      // 1. セッションがあるか確認（変更なし）
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
-        // 2. 勇者データが端末にあるか確認
+        // 2. 勇者データが端末にあるか確認（変更なし）
         const activePlayerId = await AsyncStorage.getItem('activePlayerId');
         if (activePlayerId) {
           setInitialRoute('/drawer'); // ホームへ
@@ -26,17 +28,20 @@ export default function Index() {
           setInitialRoute('/onboarding'); // 勇者登録へ
         }
       } else {
-        setInitialRoute('/auth/login'); // ログイン画面へ
+        // ★変更箇所2：未ログイン時の行き先をログイン画面ではなくウェルカム画面へ
+        setInitialRoute('/welcome'); 
       }
     } catch (e) {
       console.log(e);
-      setInitialRoute('/auth/login');
+      // ★変更箇所3：エラー時の行き先もウェルカム画面へ
+      setInitialRoute('/welcome');
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // （変更なし）
     }
   };
 
   if (isLoading) {
+    // ローディング画面（変更なし）
     return (
       <View style={{ flex: 1, backgroundColor: '#121212', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#00D4FF" />
@@ -44,6 +49,6 @@ export default function Index() {
     );
   }
 
-  // 判定したルートへ飛ばす
+  // 判定したルートへ飛ばす（変更なし）
   return <Redirect href={initialRoute} />;
 }

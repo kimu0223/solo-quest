@@ -1,12 +1,13 @@
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // 追加
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Linking, // ★追加：リンクを開く機能
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,16 @@ import {
   View
 } from 'react-native';
 
+// ダークネイビーの世界観カラー
+const COLORS = {
+  background: '#0A0A15',
+  cardBg: '#12121A',
+  border: '#1E1E2E',
+  primary: '#00D4FF',
+  text: '#FFFFFF',
+  subText: '#888899',
+};
+
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -23,10 +34,9 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
 
-  // ★追加: プレイヤーが存在するか確認して振り分ける関数
+  // ★重要なロジックはそのまま維持！
   const checkPlayerAndRedirect = async (userId: string) => {
     try {
-      // プレイヤーデータがあるか確認
       const { data: players } = await supabase
         .from('players')
         .select('id')
@@ -34,16 +44,13 @@ export default function LoginScreen() {
         .limit(1);
 
       if (players && players.length > 0) {
-        // プレイヤーがいればIDを保存してホームへ
         await AsyncStorage.setItem('activePlayerId', players[0].id);
         router.replace('/drawer'); 
       } else {
-        // いなければオンボーディング（勇者作成）へ
         router.replace('/onboarding');
       }
     } catch (e) {
       console.error(e);
-      // エラー時は安全のためオンボーディングへ
       router.replace('/onboarding');
     }
   };
@@ -58,34 +65,23 @@ export default function LoginScreen() {
     try {
       if (isSignUp) {
         // --- サインアップ処理 ---
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-
+        const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
 
-        // セッションが確立されたら（自動ログイン成功）、オンボーディングへ
         if (data.session) {
           Alert.alert('成功', 'アカウントを作成しました！勇者を作りに行こう！');
           router.replace('/onboarding');
         } else {
-          // メール確認が必要な設定の場合などはここに来る
           Alert.alert('確認', '確認メールを送信しました。メール内のリンクをクリックしてログインしてください。');
-          setIsSignUp(false); // ログインモードに戻す
+          setIsSignUp(false);
         }
 
       } else {
         // --- ログイン処理 ---
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
         if (data.user) {
-          // ログイン成功後、プレイヤーの有無をチェックして遷移
           await checkPlayerAndRedirect(data.user.id);
         }
       }
@@ -97,188 +93,173 @@ export default function LoginScreen() {
     }
   };
 
+  // ★規約などのURLを開く関数
+  const openLink = (url: string) => {
+    Linking.openURL(url).catch(() => {
+      Alert.alert('エラー', 'リンクを開けませんでした');
+    });
+  };
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1 }}
-    >
-      <ScrollView contentContainerStyle={styles.container}>
-        {/* ヘッダー */}
-        <View style={styles.header}>
-          <Ionicons name="game-controller-outline" size={60} color="#00D4FF" style={{ marginBottom: 15 }} />
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        
+        {/* ★リッチなヘッダー（ロゴとアイコン） */}
+        <View style={styles.headerContainer}>
+          <View style={styles.logoCircle}>
+            <Ionicons name="shield-checkmark" size={60} color={COLORS.primary} />
+          </View>
           <Text style={styles.title}>Solo Quest</Text>
           <Text style={styles.subtitle}>冒険ゲーム・学習プラットフォーム</Text>
         </View>
 
-        {/* フォーム */}
-        <View style={styles.form}>
+        {/* ★リッチなフォームデザイン */}
+        <View style={styles.formContainer}>
           <Text style={styles.formTitle}>
-            {isSignUp ? 'アカウント作成' : 'ログイン'}
+            {isSignUp ? 'アカウント作成' : 'ギルドログイン'}
           </Text>
 
-          <Text style={styles.label}>メールアドレス</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="example@email.com"
-            placeholderTextColor="#999"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            editable={!loading}
-          />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>メールアドレス</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="mail-outline" size={20} color={COLORS.subText} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="email@example.com"
+                placeholderTextColor={COLORS.subText}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                editable={!loading}
+              />
+            </View>
+          </View>
 
-          <Text style={styles.label}>パスワード</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="パスワードを入力"
-            placeholderTextColor="#999"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            editable={!loading}
-          />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>パスワード</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={20} color={COLORS.subText} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="6文字以上のパスワード"
+                placeholderTextColor={COLORS.subText}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                editable={!loading}
+              />
+            </View>
+          </View>
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleAuth}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>
-                {isSignUp ? 'アカウント作成' : 'ログイン'}
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => {
-            setIsSignUp(!isSignUp);
-            setEmail('');
-            setPassword('');
-          }}>
-            <Text style={styles.toggleText}>
-              {isSignUp
-                ? 'アカウントをお持ちですか？ ログイン'
-                : 'アカウントをお持ちでないですか？ 作成'}
-            </Text>
-          </TouchableOpacity>
+          {loading ? (
+            <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 20 }} />
+          ) : (
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity style={styles.mainButton} onPress={handleAuth}>
+                <Text style={styles.mainButtonText}>
+                  {isSignUp ? 'アカウント作成' : 'ログイン'}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.subButton} onPress={() => {
+                setIsSignUp(!isSignUp);
+                setEmail('');
+                setPassword('');
+              }}>
+                <Text style={styles.subButtonText}>
+                  {isSignUp ? 'ログインへ戻る' : '新規アカウント作成'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
-        {/* 情報テキスト */}
+        {/* ★リッチなインフォメーションセクション（お願い文入り） */}
         <View style={styles.infoSection}>
-          <Text style={styles.infoTitle}>このアプリについて</Text>
+          <View style={styles.infoHeader}>
+            <Ionicons name="information-circle" size={24} color={COLORS.primary} />
+            <Text style={styles.infoTitle}>このアプリについて</Text>
+          </View>
+          
           <Text style={styles.infoText}>
-            🎮 <Text style={styles.infoBold}>Solo Quest</Text> は、子どもたちの学習を楽しくサポートするゲーム・学習プラットフォームです。
+            🎮 <Text style={{ fontWeight: 'bold', color: '#fff' }}>Solo Quest</Text> は、子どもたちの日常を冒険に変えるタスク管理アプリです。
           </Text>
           <Text style={styles.infoText}>
-            👨‍👩‍👧 親御さんがクエスト（課題）を作成し、お子さんはゲーム感覚でクエストをこなします。
+            👨‍👩‍👧 親御さんがクエスト（お手伝い）を作成し、お子さんが声で報告することで、家族一緒に楽しく習慣化を目指せます！
           </Text>
+          
+          <View style={styles.divider} />
+          
+          <View style={styles.infoHeader}>
+            <Ionicons name="bulb" size={24} color="#FFD700" />
+            <Text style={styles.warningTitle}>アカウント作成のお願い</Text>
+          </View>
           <Text style={styles.infoText}>
-            ⭐ レベルアップしたり、バッジを獲得したりしながら、楽しく学習できます！
+            現在、安全な家族間のデータ共有や、ギルドのAI鑑定士機能を提供するため、初期にアカウントの作成をお願いしております。
+            今後のアップデートでさらなる機能追加を予定しておりますので、ぜひアカウントを作成して冒険にご参加いただけると幸いです！
           </Text>
+
+          {/* ★ここが追加ポイント：利用規約とプライバシーポリシーへのリンク */}
+          <View style={styles.divider} />
+          <View style={styles.legalLinksContainer}>
+            {/* ※以下のURLは仮のものです。ご自身のWebサイトやNotion等のURLに書き換えてください */}
+            <TouchableOpacity onPress={() => openLink('https://example.com/terms')}>
+              <Text style={styles.linkText}>利用規約</Text>
+            </TouchableOpacity>
+            <Text style={{ color: '#555' }}>|</Text>
+            <TouchableOpacity onPress={() => openLink('https://example.com/privacy')}>
+              <Text style={styles.linkText}>プライバシーポリシー</Text>
+            </TouchableOpacity>
+          </View>
+
         </View>
+        
+        <View style={{ height: 40 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: '#121212',
-    paddingHorizontal: 20,
-    paddingVertical: 40,
-    justifyContent: 'center',
+  container: { flex: 1, backgroundColor: COLORS.background },
+  scrollContent: { flexGrow: 1, padding: 24, justifyContent: 'center' },
+  
+  headerContainer: { alignItems: 'center', marginBottom: 40, marginTop: 20 },
+  logoCircle: { 
+    width: 100, height: 100, borderRadius: 50, 
+    backgroundColor: COLORS.cardBg, borderWidth: 2, borderColor: COLORS.border,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
+    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 10
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 40,
+  title: { fontSize: 32, fontWeight: '900', color: COLORS.text, letterSpacing: 2 },
+  subtitle: { fontSize: 14, color: COLORS.primary, marginTop: 4, fontWeight: 'bold' },
+
+  formContainer: { backgroundColor: COLORS.cardBg, padding: 24, borderRadius: 24, borderWidth: 1, borderColor: COLORS.border, marginBottom: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
+  formTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginBottom: 24, textAlign: 'center' },
+  inputGroup: { marginBottom: 20 },
+  label: { color: COLORS.text, fontSize: 12, fontWeight: 'bold', marginBottom: 8, marginLeft: 4 },
+  inputWrapper: { 
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, 
+    borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 12 
   },
-  title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#00D4FF',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#aaa',
-  },
-  form: {
-    backgroundColor: '#1A1A2E',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 30,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  formTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 20,
-  },
-  label: {
-    color: '#00D4FF',
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-  },
-  input: {
-    backgroundColor: '#0A0A15',
-    borderWidth: 1,
-    borderColor: '#333',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 20,
-    color: '#fff',
-    fontSize: 14,
-  },
-  button: {
-    backgroundColor: '#00D4FF',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#000',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  toggleText: {
-    color: '#00D4FF',
-    textAlign: 'center',
-    marginTop: 20,
-    fontSize: 13,
-  },
-  infoSection: {
-    backgroundColor: 'rgba(0, 212, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: '#00D4FF',
-    borderRadius: 12,
-    padding: 16,
-  },
-  infoTitle: {
-    color: '#00D4FF',
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  infoText: {
-    color: '#aaa',
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  infoBold: {
-    color: '#00D4FF',
-    fontWeight: 'bold',
-  },
+  inputIcon: { marginRight: 10 },
+  input: { flex: 1, color: COLORS.text, paddingVertical: 14, fontSize: 16 },
+
+  buttonContainer: { marginTop: 10, gap: 12 },
+  mainButton: { backgroundColor: COLORS.primary, paddingVertical: 16, borderRadius: 12, alignItems: 'center', shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 5 },
+  mainButtonText: { color: '#000', fontSize: 16, fontWeight: 'bold' },
+  subButton: { backgroundColor: 'transparent', paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: COLORS.primary },
+  subButtonText: { color: COLORS.primary, fontSize: 16, fontWeight: 'bold' },
+
+  infoSection: { backgroundColor: '#1A1A24', padding: 24, borderRadius: 20, borderWidth: 1, borderColor: '#333' },
+  infoHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  infoTitle: { color: COLORS.text, fontSize: 16, fontWeight: 'bold' },
+  infoText: { color: '#AAAAAA', fontSize: 13, lineHeight: 22, marginBottom: 10 },
+  divider: { height: 1, backgroundColor: 'rgba(0, 212, 255, 0.2)', marginVertical: 16 },
+  warningTitle: { color: '#FFD700', fontSize: 16, fontWeight: 'bold' },
+  
+  // リンク用スタイル（ここを追加しました！）
+  legalLinksContainer: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 5 },
+  linkText: { color: COLORS.primary, fontSize: 12, textDecorationLine: 'underline' },
 });
