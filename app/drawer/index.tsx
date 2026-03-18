@@ -170,8 +170,8 @@ export default function HomeScreen() {
   const startRecording = async () => {
     if (dailyCount >= DAILY_LIMIT) {
       Alert.alert(
-        "本日の回数終了",
-        "無料プランでは1日3回までです。\nプレミアムプランで無制限に話そう！\n（※現在は開発中につき制限のみ動作します）",
+        "本日の鑑定回数終了",
+        "本日の鑑定回数（3回）を使い切りました。\n明日また挑戦してね！",
         [{ text: "OK" }]
       );
       return;

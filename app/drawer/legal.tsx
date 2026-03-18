@@ -33,15 +33,18 @@ export default function LegalScreen() {
     setIsSending(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
-      // ここにSupabaseへの保存処理などを実装します
-      // 今回はログ出力のみで成功扱いとします
-      console.log("お問い合わせ:", contactText, "User:", user?.id);
+
+      const { error } = await supabase.from('contact_messages').insert({
+        user_id: user?.id ?? null,
+        message: contactText.trim(),
+      });
+
+      if (error) throw error;
 
       Alert.alert("送信完了", "お問い合わせを受け付けました。ギルド運営より順次確認いたします。");
       setContactText('');
     } catch (e) {
-      Alert.alert("エラー", "送信に失敗しました。");
+      Alert.alert("エラー", "送信に失敗しました。しばらく経ってから再度お試しください。");
     } finally {
       setIsSending(false);
     }
@@ -73,6 +76,31 @@ export default function LegalScreen() {
 
   const processDeletion = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        await AsyncStorage.clear();
+        router.replace('/auth/login');
+        return;
+      }
+
+      // ユーザーに紐づく全データを削除
+      const { data: players } = await supabase
+        .from('players')
+        .select('id')
+        .eq('parent_id', user.id);
+
+      if (players && players.length > 0) {
+        const playerIds = players.map((p: any) => p.id);
+        // 子テーブルのデータを削除
+        await supabase.from('appraisal_logs').delete().in('player_id', playerIds);
+        await supabase.from('quests').delete().in('player_id', playerIds);
+        await supabase.from('rewards').delete().in('player_id', playerIds);
+        await supabase.from('players').delete().in('id', playerIds);
+      }
+
+      // プロフィールを削除
+      await supabase.from('profiles').delete().eq('id', user.id);
+
       await supabase.auth.signOut();
       await AsyncStorage.clear();
       router.replace('/auth/login');

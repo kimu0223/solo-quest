@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Linking, // ★追加：リンクを開く機能
   Platform,
   ScrollView,
   StyleSheet,
@@ -93,11 +92,8 @@ export default function LoginScreen() {
     }
   };
 
-  // ★規約などのURLを開く関数
-  const openLink = (url: string) => {
-    Linking.openURL(url).catch(() => {
-      Alert.alert('エラー', 'リンクを開けませんでした');
-    });
+  const openLegal = () => {
+    router.push('/drawer/legal');
   };
 
   return (
@@ -200,15 +196,14 @@ export default function LoginScreen() {
             今後のアップデートでさらなる機能追加を予定しておりますので、ぜひアカウントを作成して冒険にご参加いただけると幸いです！
           </Text>
 
-          {/* ★ここが追加ポイント：利用規約とプライバシーポリシーへのリンク */}
+          {/* 利用規約とプライバシーポリシーへのリンク */}
           <View style={styles.divider} />
           <View style={styles.legalLinksContainer}>
-            {/* ※以下のURLは仮のものです。ご自身のWebサイトやNotion等のURLに書き換えてください */}
-            <TouchableOpacity onPress={() => openLink('https://example.com/terms')}>
+            <TouchableOpacity onPress={openLegal}>
               <Text style={styles.linkText}>利用規約</Text>
             </TouchableOpacity>
             <Text style={{ color: '#555' }}>|</Text>
-            <TouchableOpacity onPress={() => openLink('https://example.com/privacy')}>
+            <TouchableOpacity onPress={openLegal}>
               <Text style={styles.linkText}>プライバシーポリシー</Text>
             </TouchableOpacity>
           </View>
