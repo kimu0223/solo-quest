@@ -33,10 +33,13 @@ export default function LegalScreen() {
     setIsSending(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
-      // ここにSupabaseへの保存処理などを実装します
-      // 今回はログ出力のみで成功扱いとします
-      console.log("お問い合わせ:", contactText, "User:", user?.id);
+      if (!user) throw new Error('未ログイン');
+
+      const { error } = await supabase.from('contact_messages').insert({
+        user_id: user.id,
+        message: contactText.trim(),
+      });
+      if (error) throw error;
 
       Alert.alert("送信完了", "お問い合わせを受け付けました。ギルド運営より順次確認いたします。");
       setContactText('');
@@ -73,22 +76,8 @@ export default function LegalScreen() {
 
   const processDeletion = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('セッションが見つかりません');
-
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-      const res = await fetch(`${supabaseUrl}/functions/v1/delete-account`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? '削除に失敗しました');
-      }
+      const { error } = await supabase.functions.invoke('delete-account');
+      if (error) throw error;
 
       await AsyncStorage.clear();
       router.replace('/auth/login');

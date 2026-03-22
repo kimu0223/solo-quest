@@ -25,7 +25,6 @@ LogBox.ignoreLogs([
   '[Reanimated] `createAnimatedPropAdapter` is no longer necessary',
 ]);
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const DAILY_LIMIT = 3;
 
 // ダークネイビーの世界観のカラーパレット
@@ -230,25 +229,10 @@ export default function HomeScreen() {
 
   const analyzeWithGemini = async (base64Audio: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('セッションが見つかりません');
-
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/appraise-audio`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            base64Audio,
-            playerId: player?.id,
-          }),
-        }
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? '鑑定に失敗しました');
+      const { data, error } = await supabase.functions.invoke('appraise-audio', {
+        body: { base64Audio, playerId: player?.id },
+      });
+      if (error) throw error;
       return data;
     } catch (error) {
       console.error("Appraise Error:", error);
