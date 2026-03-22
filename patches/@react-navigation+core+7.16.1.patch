@@ -1,0 +1,29 @@
+diff --git a/node_modules/@react-navigation/core/lib/module/getStateFromPath.js b/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
+index 7132844..4758442 100644
+--- a/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
++++ b/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
+@@ -235,11 +235,19 @@ function checkForDuplicatedConfigs(configs) {
+   }, {});
+ }
+ function getConfigsWithRegexes(configs) {
+-  return configs.map(c => ({
+-    ...c,
+-    // Add `$` to the regex to make sure it matches till end of the path and not just beginning
+-    regex: c.regex ? new RegExp(c.regex.source + '$') : undefined
+-  }));
++  // Use a for loop instead of .map() to avoid a Hermes GC bug (EXC_BAD_ACCESS crash)
++  // where creating new RegExp() inside arrayPrototypeMap corrupts DictPropertyMap.
++  // See: Hermes crash in DictPropertyMap::findOrAdd during JSRegExp::initialize
++  const result = [];
++  for (let i = 0; i < configs.length; i++) {
++    const c = configs[i];
++    result.push({
++      ...c,
++      // Add `$` to the regex to make sure it matches till end of the path and not just beginning
++      regex: c.regex ? new RegExp(c.regex.source + '$') : undefined
++    });
++  }
++  return result;
+ }
+ const matchAgainstConfigs = (remaining, configs) => {
+   let routes;

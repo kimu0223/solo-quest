@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -23,10 +23,9 @@ import CircularProgress from 'react-native-circular-progress-indicator';
 
 LogBox.ignoreLogs([
   '[Reanimated] `createAnimatedPropAdapter` is no longer necessary',
-  'Expo AV has been deprecated',
 ]);
 
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const DAILY_LIMIT = 3;
 
 // ダークネイビーの世界観のカラーパレット
@@ -47,7 +46,7 @@ export default function HomeScreen() {
   const [nextReward, setNextReward] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  const [recording, setRecording] = useState<Audio.Recording | undefined>(undefined);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
@@ -59,8 +58,8 @@ export default function HomeScreen() {
     fetchData();
     checkDailyLimit();
     return () => {
-      if (recording) {
-        try { recording.stopAndUnloadAsync(); } catch (e) {}
+      if (recorder.isRecording) {
+        try { recorder.stop(); } catch (e) {}
       }
     };
   }, []);
@@ -178,18 +177,14 @@ export default function HomeScreen() {
     }
 
     try {
-      if (recording) {
-        try { await recording.stopAndUnloadAsync(); } catch (e) {}
-        setRecording(undefined);
-      }
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
         Alert.alert('マイクの許可が必要です');
         return;
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording: newRecording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(newRecording);
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
       setIsRecording(true);
     } catch (err) {
       console.error('Failed to start recording', err);
@@ -198,14 +193,13 @@ export default function HomeScreen() {
   };
 
   const stopAndAppraise = async () => {
-    if (!recording) return;
+    if (!recorder.isRecording) return;
     setIsRecording(false);
     setIsAnalyzing(true);
 
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(undefined);
+      await recorder.stop();
+      const uri = recorder.uri;
 
       if (!uri) throw new Error('No recording URI');
 
@@ -228,11 +222,7 @@ export default function HomeScreen() {
       }
     } catch (err: any) {
       console.error(err);
-      if (err.message && err.message.includes("deprecated")) {
-         Alert.alert("エラー", "録音データの読み込みに失敗しました。");
-      } else {
-         Alert.alert('エラー', '鑑定中に問題が発生しました。');
-      }
+      Alert.alert('エラー', '鑑定中に問題が発生しました。');
     } finally {
       setIsAnalyzing(false);
     }
@@ -240,43 +230,28 @@ export default function HomeScreen() {
 
   const analyzeWithGemini = async (base64Audio: string) => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('セッションが見つかりません');
+
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        `${SUPABASE_URL}/functions/v1/appraise-audio`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
           body: JSON.stringify({
-            contents: [{
-              parts: [{ inlineData: { mimeType: 'audio/mp4', data: base64Audio } }]
-            }],
-            generationConfig: {
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: "OBJECT",
-                properties: {
-                  transcript: { type: "STRING" },
-                  rank: { type: "STRING", enum: ["S", "A", "B", "C", "RETRY"] },
-                  comment: { type: "STRING" },
-                  xp: { type: "INTEGER" }
-                }
-              }
-            },
-            systemInstruction: {
-              parts: [{ text: `
-                あなたは子供の成長を見守る冒険ギルドの鑑定士です。
-                提出された音声を聞いて、子供が「今日の出来事」や「頑張ったこと」を話していたら評価してください。
-                JSONで返してください。
-              ` }]
-            }
-          })
+            base64Audio,
+            playerId: player?.id,
+          }),
         }
       );
       const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
-      const jsonText = data.candidates[0].content.parts[0].text;
-      return JSON.parse(jsonText);
+      if (!response.ok) throw new Error(data.error ?? '鑑定に失敗しました');
+      return data;
     } catch (error) {
-      console.error("Gemini Error:", error);
+      console.error("Appraise Error:", error);
       return null;
     }
   };

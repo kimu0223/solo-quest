@@ -1,212 +1,387 @@
-ご提示いただいたすべての情報を統合し、AI（Cursor、Copilot等）がプロジェクトの全容を完璧に理解し、一貫性のあるコードを生成できるように最適化した**「Solo Quest: MVP開発究極仕様書 (MVP_SPEC.md)」**を作成しました。
-
-これをプロジェクトのルートディレクトリに配置し、AIへの最初の指示として読み込ませてください。
-
----
-
-# 🛡️ Solo Quest: MVP開発詳細仕様書 (MVP_SPEC.md)
+# 🛡️ Solo Quest: MVP実装仕様書 (MVP_SPEC.md)
 
 > **[Source of Truth]**
-> このドキュメントはプロジェクトの唯一の正解（真実のソース）です。AIツールは実装時に必ずこの仕様・命名規則・ガイドラインを遵守してください。
+> このドキュメントはプロジェクトの現在の実装状態を反映した唯一の正解（真実のソース）です。
+> Supabase MCP で実際のスキーマ・ポリシーを確認済み（2026-03-20）。
+> AIツールは実装時に必ずこの仕様・命名規則・ガイドラインを遵守してください。
 
 ---
 
 ## 1. プロジェクト概要
 
-* **プロジェクト名:** Solo Quest (ソロクエスト)
-* **コンセプト:** 日常のルーチンをRPGのクエストに変換し、子供の自律的な成長を促す。
-* **ビジョン:** 親の負担をゼロにし、AI鑑定を通じて子供の「自分でできた！」という達成感を最大化する。
-* **ターゲット:** 3歳〜12歳の子供とその保護者。
-
-## 2. 技術スタック
-
-* **Frontend:** React Native (Expo) / TypeScript / Expo Router
-* **Styling:** NativeWind (Tailwind CSS)
-* **Backend/Database:** Supabase (Auth, Database, Storage, Edge Functions)
-* **AI Integration:** OpenAI API (Whisper: 音声解析, GPT-4o-mini: 鑑定・評価)
-* **State Management:** React Context API (マナ・カラー/テーマ管理用)
-
-## 3. MVP主要機能
-
-### 3.1 オンボーディング: システム覚醒 (The Awakening)
-
-* **プロセス:** 名前入力 ➡ マナ・カラー選択 ➡ `players`テーブル初期化。
-* **マナ・カラー定義:** - `Navy`: #1A1A2E
-* `LightBlue`: #00D4FF
-* `Pink`: #FF74B1
-* `Green`: #39FF14
-* `Red`: #FF3131
-
-
-* **結果:** 選択色が `ThemeContext` を通じてUI全体の発光エフェクトやアクセントカラーに反映される。
-
-### 3.2 クエストシステム
-
-* **デイリークエスト:** 親がプリセットしたタスク。手動完了時にXP付与。
-* **隠しクエスト (AI鑑定):** 子供が自発的な善行を音声で報告。
-* **報酬フロー:** 完了 ➡ エフェクト発火 ➡ XP加算 ➡ レベル判定。
-
-### 3.3 AI鑑定エンジン (核)
-
-* **フロー:** 録音 ➡ Whisper(STT) ➡ GPT-4o-mini(判定) ➡ JSON返却 ➡ 報酬付与。
-* **AI人格:** 「熱血マスター・ジン」。子供を鼓舞し、RPG風の口調（ふりがな付）で評価。
-
-### 3.4 成長ロジック
-
-* **レベル計算式:** 
-* **演出:** 動的なXPバー、Lottieアニメーション、マナ・カラー連動型エフェクト。
-
-### 3.5 ギルドマスターモード (管理者機能)
-
-* **アクセス:** 算数クイズまたはピンコードによるチャイルドロック。
-* **機能:** クエストCRUD、鑑定ログ閲覧、AIランクの修正（オーバーライド）。
+- **プロジェクト名:** Solo Quest（ソロクエスト）
+- **コンセプト:** 日常のルーチンをRPGのクエストに変換し、子供の自律的な成長を促す。
+- **ビジョン:** 親の負担をゼロにし、AI鑑定を通じて子供の「自分でできた！」という達成感を最大化する。
+- **ターゲット:** 3歳〜12歳の子供とその保護者。
+- **プラットフォーム:** iOS 優先（App Store 申請済み）。Android は将来対応。
 
 ---
 
-## 4. データベース設計 (Supabase Schema)
+## 2. 技術スタック
 
-```sql
--- 1. profiles: 親のアカウント情報
-table profiles (
-  id uuid primary key,        -- auth.users.id と紐付け
-  email text,
-  plan_type text              -- 'free', 'standard', 'family'
-)
+| カテゴリ | 採用技術 | バージョン |
+|----------|----------|------------|
+| フレームワーク | React Native (Expo) | SDK 55 |
+| 言語 | TypeScript | ~5.9.2 |
+| ルーティング | Expo Router v4 (expo-router ~55.0.5) | ファイルベース |
+| スタイリング | **React Native `StyleSheet`**（NativeWindは不使用） | RN 0.83.2 |
+| バックエンド / DB | Supabase (Auth, Postgres) | @supabase/supabase-js ^2.89.0 |
+| **AI統合** | **Google Gemini 2.5 Flash API**（OpenAIは不使用） | gemini-2.5-flash |
+| 音声録音 | expo-audio ~55.0.8 | — |
+| ローカルストレージ | @react-native-async-storage/async-storage 2.2.0 | — |
+| JS エンジン | Hermes | RN 0.83.2 同梱 |
 
--- 2. players: 子供のプロフィール
-table players (
-  id uuid primary key,
-  parent_id uuid fk,          -- profiles.id
-  name text,
-  level integer default 1,
-  total_xp integer default 0,
-  mana_color text             -- Hexコード (#FFFFFF)
-)
+### セキュリティ対応状況
 
--- 3. quests: 親が設定したタスク
-table quests (
-  id uuid primary key,
-  player_id uuid fk,          -- players.id
-  title text,
-  is_completed boolean,
-  xp_reward integer
-)
+| 問題 | 状態 |
+|------|------|
+| `EXPO_PUBLIC_GEMINI_API_KEY` がバンドルに露出 | ✅ Edge Function 移行済み（2026-03-20） |
+| RLS ポリシーが全テーブルで `USING (true)` | ✅ 修正済み（2026-03-20） |
 
--- 4. appraisal_logs: AI鑑定の履歴
-table appraisal_logs (
-  id uuid primary key,
-  player_id uuid fk,          -- players.id
-  transcript text,            -- Whisperでの文字起こし内容
-  ai_rank text,               -- 'S', 'A', 'B', 'C'
-  ai_comment text,            -- AIからの褒め言葉
-  created_at timestamp
-)
+---
 
+## 3. Supabase プロジェクト
+
+- **Project ID:** `irosahorhknyzchgwdtx`
+- **Region:** ap-northeast-1（東京）
+- **Postgres:** 17.6
+- **Edge Functions デプロイ数:** 0（未デプロイ）
+- **マイグレーション管理:** なし（スキーマは Supabase Dashboard から直接作成）
+
+---
+
+## 4. ルート構造
+
+```
+app/
+├── _layout.tsx          # ルートレイアウト（Stack、ヘッダーなし）
+├── index.tsx            # 認証ゲート（セッション確認 → ルーティング）
+├── welcome.tsx          # 3スライドのオンボーディングカルーセル
+├── onboarding.tsx       # 勇者作成（名前 + マナカラー選択）
+├── admin.tsx            # ギルドマスター管理画面（数学クイズでアクセス）
+├── auth/
+│   ├── _layout.tsx
+│   └── login.tsx        # メール/パスワード認証（サインアップ + サインイン）
+└── drawer/
+    ├── _layout.tsx      # Drawer ナビゲーター（CustomDrawerContent）
+    ├── index.tsx        # ホーム画面（クエスト一覧 + XP + AI鑑定）
+    ├── rewards.tsx      # ご褒美の宝物庫
+    ├── profile.tsx      # ギルドカード（冒険者ステータス）
+    └── legal.tsx        # 規約・設定（ドロワーメニューからは非表示）
+```
+
+### 認証ゲートのロジック（`app/index.tsx`）
+
+```
+セッションあり AND activePlayerId あり → /drawer
+セッションあり AND activePlayerId なし → /onboarding
+セッションなし → /welcome
 ```
 
 ---
 
-## 5. UI/UX ガイドライン
+## 5. データベース設計（実際のスキーマ・Supabase MCP確認済み）
 
-* **基本テーマ:** ダークモード (背景色: #121212)。
-* **視覚効果:** 選択したマナ・カラーに基づくネオン・グローエフェクト。
-* **コンポーネント:** 角丸 (border-radius: 16px) のカードUIを基本とする。
-* **アクセシビリティ:** 子供向けに大きなタップ領域を確保し、漢字には全てふりがなを振る。
+```sql
+-- 1. profiles: 親のアカウント情報（存在するが、アプリコードからの書き込みは未実装）
+table profiles (
+  id         uuid primary key,  -- auth.users.id と一致（FK）
+  email      text,
+  plan_type  text default 'free',
+  created_at timestamptz default timezone('utc', now())
+)
+-- 現状: 1行のみ存在。アプリコードから INSERT していない。トリガーによる自動生成か手動作成と推定。
+-- RLS: SELECT のみ "Users can view their own profile" (auth.uid() = id) — 適切
 
-## 6. 実装ロードマップ (30日間)
+-- 2. players: 子供のプロフィール
+table players (
+  id           uuid primary key default gen_random_uuid(),
+  parent_id    uuid,              -- auth.users.id に FK
+  name         text,
+  display_name text,              -- 表示名（ホーム・管理画面で使用）
+  mana_color   text default '#00D4FF',
+  level        integer default 1,
+  total_xp     integer default 0,
+  goal_monthly text,              -- 今月の目標
+  goal_yearly  text,              -- 今年の目標
+  created_at   timestamptz default timezone('utc', now())
+)
+-- 現状: 4行。RLS: ⚠️ "Allow all access for now" (USING true) — 要修正
 
-* **Day 1-5:** 基盤構築、Auth、マナ選択テーマ機能。
-* **Day 6-10:** クエストCRUD、XP/レベル計算ロジック。
-* **Day 11-15:** 音声録音、AI鑑定用Edge Functions。
-* **Day 16-21:** 親用ダッシュボード、ログ修正画面。
-* **Day 22-30:** ブラッシュアップ、SE/エフェクト追加、最終調整。
+-- 3. quests: 親が設定したタスク
+table quests (
+  id           uuid primary key default gen_random_uuid(),
+  player_id    uuid,              -- players.id に FK
+  title        text,
+  is_completed boolean default false,
+  xp_reward    integer default 10,
+  time_limit   integer,           -- タイムアタック用制限時間（分）。null = 制限なし
+  created_at   timestamptz default timezone('utc', now())
+)
+-- 現状: 5行。RLS: ⚠️ "Allow all access for now" (USING true) — 要修正
 
----
+-- 4. rewards: レベル達成時のご褒美
+table rewards (
+  id           uuid primary key default gen_random_uuid(),
+  player_id    uuid,              -- players.id に FK
+  title        text,
+  target_level integer,
+  is_unlocked  boolean default false,
+  created_at   timestamptz default timezone('utc', now())
+)
+-- 現状: 3行。RLS: ⚠️ "Allow all access for now" (USING true) — 要修正
 
-## 7. 実装ガイドライン & 禁止事項
-
-### 8. 実装ガイドライン (Best Practices)
-
-* **TypeScript:** `any` の使用は厳禁。全てのProps、State、APIレスポンスに型を定義せよ。
-* **ディレクトリ構造:**
-* `app/`: Expo Router（Pages）
-* `components/ui/`: 原子レベルの共通パーツ
-* `hooks/`: API通信やロジック（`useAuth`, `useXP`, `useTheme`等）
-* `lib/`: Supabaseクライアント定義等
-
-
-* **スタイリング:** NativeWindを一貫して使用。複雑な動的スタイルのみ `StyleSheet` を許容する。
-* **状態管理:** グローバルなテーマ（マナ）は `Context API` で管理せよ。
-
-### 9. 禁止・NG事項 (Non-Goals / Anti-Patterns)
-
-* **ハードコード禁止:** 色（マナ）やフォントサイズを直接指定しない。必ず `ThemeContext` または定数ファイルを参照せよ。
-* **UIフリーズ禁止:** AI鑑定等の非同期処理中は必ずローディング（骨格アニメーション）を表示し、ユーザー操作を妨げない。
-* **セキュリティの欠如禁止:** クエリ発行時は常に `parent_id` によるフィルタリングを行い、他者のデータへのアクセスを遮断せよ。
-* **過剰なライブラリ禁止:** 基本機能は Expo/React Native 標準コンポーネントで構築せよ。
-* **直書きテキスト禁止:** 多言語化やAI管理のため、テキスト定数は `constants/Text.ts` 等に集約せよ。
-
----
-
-セキュリティに関するご指摘、**非常に重要です。** 個人開発であっても、子供のデータや音声、親の認証情報を扱う以上、ここを疎かにすると信頼をすべて失ってしまいます。
-
-おっしゃる通り、**APIキーの隠匿**と**データベースの保護**は「当たり前」ですが、AIにコードを書かせると、つい便利な「フロントエンドからの直接呼び出し（APIキーがアプリ内に埋め込まれてしまう状態）」を提案してくることがあります。
-
-これを防ぐための**「セキュリティ・プロトコル」**を `MVP_SPEC.md` に追加しましょう。
-
----
-
-## `MVP_SPEC.md` に追加すべき「セキュリティ・ガイドライン」
-
-以下の内容を「9. 禁止・NG事項」の後ろ、あるいは「10. セキュリティ・プロトコル」として追記してください。
-
-### 10. セキュリティ・プロトコル (Security & Safety)
-
-* **APIキーの完全秘匿:**
-* OpenAI API キー等の機密情報は、**絶対にフロントエンド（React Native）に持たせないこと。**
-* 必ず **Supabase Edge Functions** を中継し、APIキーは Supabase 側の環境変数（Secrets）として管理する。
-* クライアントサイドで `.env` を使用する場合も、それは開発環境用とし、`.gitignore` で Git 管理から除外することを徹底する。
-
-
-* **Supabase Row Level Security (RLS) の徹底:**
-* 全てのテーブルに対して RLS を有効化し、「自分の家族（parent_id）のデータ以外は `SELECT/INSERT/UPDATE/DELETE` できない」ポリシーを適用する。
-* サービスロール（Service Role Key）をフロントエンドで使用することは厳禁とする。
-
-
-* **認証情報の保護:**
-* ユーザー認証には Supabase Auth を使用し、トークンの保存には Expo の `SecureStore` を用いて暗号化保存を行う。
-
-
-* **音声・個人データの取り扱い:**
-* 音声データは AI 鑑定完了後、不要な場合は速やかに Storage から削除する。
-* ログに記録される内容は、個人を特定できる情報が含まれないよう配慮する。
-
-
+-- 5. appraisal_logs: AI鑑定ログ（テーブルは存在するがアプリから書き込み未実装）
+table appraisal_logs (
+  id         uuid primary key default gen_random_uuid(),
+  player_id  uuid,              -- players.id に FK
+  transcript text,              -- 音声の文字起こし
+  ai_rank    text,              -- 'S', 'A', 'B', 'C', 'RETRY'
+  ai_comment text,
+  xp_awarded integer default 0,
+  created_at timestamptz default timezone('utc', now())
+)
+-- 現状: 0行。アプリは鑑定結果をDBに保存せず、モーダル表示のみ。
+-- RLS: ⚠️ "Allow all access for now" (USING true) — 要修正
+```
 
 ---
 
-## 実際にどうやって「隠す」のか？（実装のイメージ）
+## 6. RLS ポリシー現状と修正すべき内容
 
-AIツールが間違えないよう、以下の構造を頭に入れておいてください。
+### 現状（Supabase MCP確認済み）
 
-1. **フロントエンド（あなたのアプリ）**:
-「これ鑑定して！」と音声を Supabase Edge Functions に送るだけ。（ここには **OpenAI のキーは入っていない**）
-2. **ミドルウェア（Supabase Edge Functions）**:
-ここが「金庫」の役割。Supabase のサーバー内で、設定された OpenAI の秘密キーを取り出し、OpenAI に問い合わせる。
-3. **OpenAI**:
-結果を Edge Function に返し、それがアプリに戻ってくる。
+| テーブル | ポリシー名 | 対象操作 | 条件 | 問題 |
+|----------|-----------|---------|------|------|
+| profiles | Users can view their own profile. | SELECT | `auth.uid() = id` | ✅ 適切（ただし subselect にすべき） |
+| players | Allow all access for now | ALL | `true` | 🚨 素通し |
+| quests | Allow all access for now | ALL | `true` | 🚨 素通し |
+| rewards | Allow all access for now | ALL | `true` | 🚨 素通し |
+| appraisal_logs | Allow all access for now | ALL | `true` | 🚨 素通し |
 
-> **この仕組みにより、悪意のあるユーザーがアプリを解析しても、あなたの OpenAI API キーを盗むことは不可能になります。**
+### 修正すべきポリシー（SQLテンプレート）
+
+```sql
+-- players: 自分が親であるレコードのみ操作可
+DROP POLICY "Allow all access for now" ON players;
+CREATE POLICY "Players: own family only"
+  ON players FOR ALL
+  USING (parent_id = (SELECT auth.uid()))
+  WITH CHECK (parent_id = (SELECT auth.uid()));
+
+-- quests: players 経由で自分の家族のみ
+DROP POLICY "Allow all access for now" ON quests;
+CREATE POLICY "Quests: own family only"
+  ON quests FOR ALL
+  USING (
+    player_id IN (
+      SELECT id FROM players WHERE parent_id = (SELECT auth.uid())
+    )
+  )
+  WITH CHECK (
+    player_id IN (
+      SELECT id FROM players WHERE parent_id = (SELECT auth.uid())
+    )
+  );
+
+-- rewards: quests と同様
+DROP POLICY "Allow all access for now" ON rewards;
+CREATE POLICY "Rewards: own family only"
+  ON rewards FOR ALL
+  USING (
+    player_id IN (
+      SELECT id FROM players WHERE parent_id = (SELECT auth.uid())
+    )
+  )
+  WITH CHECK (
+    player_id IN (
+      SELECT id FROM players WHERE parent_id = (SELECT auth.uid())
+    )
+  );
+
+-- appraisal_logs: quests と同様
+DROP POLICY "Allow all access for now" ON appraisal_logs;
+CREATE POLICY "AppraisalLogs: own family only"
+  ON appraisal_logs FOR ALL
+  USING (
+    player_id IN (
+      SELECT id FROM players WHERE parent_id = (SELECT auth.uid())
+    )
+  )
+  WITH CHECK (
+    player_id IN (
+      SELECT id FROM players WHERE parent_id = (SELECT auth.uid())
+    )
+  );
+
+-- profiles: パフォーマンス改善（auth.uid() の再評価を避ける）
+DROP POLICY "Users can view their own profile." ON profiles;
+CREATE POLICY "Profiles: own record only"
+  ON profiles FOR SELECT
+  USING (id = (SELECT auth.uid()));
+```
 
 ---
-### AI鑑定プロンプト・ロジック (Edge Function)
 
-* **役割:** 熱血マスター・ジンとして子供の自律性を称賛する。
-* **判定基準:** - **S:** 驚くべき自発性/利他的行動 (100 XP)
-* **A:** 自立的・前向きな行動 (50 XP)
-* **B:** 通常の努力/完了報告 (20 XP)
+## 7. パフォーマンス課題（Supabase Advisor 確認済み）
 
+| 問題 | 影響テーブル | 対応SQL |
+|------|-------------|---------|
+| FK カラムにインデックスなし | players, quests, rewards, appraisal_logs | 下記参照 |
+| RLS で `auth.uid()` を行ごとに再評価 | profiles | `(SELECT auth.uid())` に変更で解決 |
 
-* **JSON出力形式:** `{ "rank": string, "feedback": string, "xp_bonus": number }` を厳守。
+```sql
+-- FK インデックス追加
+CREATE INDEX ON players (parent_id);
+CREATE INDEX ON quests (player_id);
+CREATE INDEX ON rewards (player_id);
+CREATE INDEX ON appraisal_logs (player_id);
+```
 
 ---
+
+## 8. 成長ロジック
+
+```typescript
+// レベル計算式（drawer/index.tsx の giveExperience 関数）
+const newTotalXp = (player.total_xp || 0) + amount;
+const newLevel = Math.floor(newTotalXp / 100) + 1;
+
+// XPバー進捗（0〜100%）
+const progress = (player.total_xp % 100) || 0;
+```
+
+| ランク | XP | 意味 |
+|--------|-----|------|
+| S | 100 XP | 驚くべき自発性・利他的行動 |
+| A | 50 XP | 自立的・前向きな行動 |
+| B | 20 XP | 通常の努力・完了報告 |
+| C | 10 XP | 最低限の努力 |
+| RETRY | 0 XP | 聞き取れなかった・やり直し |
+
+---
+
+## 9. AI鑑定エンジン（現在の実装）
+
+### フロー
+
+```
+音声録音（expo-audio）
+  → base64エンコード（expo-file-system/legacy）
+  → Gemini 2.5 Flash API に直接 fetch（⚠️ APIキーがクライアントに露出中）
+  → Gemini が STT（文字起こし）と評価を1回のAPIコールで実施
+  → JSON レスポンス解析
+  → XP付与（players テーブル更新）+ モーダル表示
+  ※ appraisal_logs への保存は未実装
+```
+
+### APIエンドポイント（Edge Function 経由）
+
+```
+${EXPO_PUBLIC_SUPABASE_URL}/functions/v1/appraise-audio
+Authorization: Bearer <ユーザーのJWTトークン>
+```
+
+### レスポンス JSON スキーマ（Gemini structured output）
+
+```typescript
+{
+  transcript: string,  // 音声の文字起こし
+  rank:       "S" | "A" | "B" | "C" | "RETRY",
+  comment:    string,  // 鑑定士キャラからのフィードバック
+  xp:         number   // 付与するXP
+}
+```
+
+### デイリー制限
+
+- 1日3回（`DAILY_LIMIT = 3`）
+- AsyncStorage の `lastUsageDate` / `dailyUsageCount` で管理（日付変更でリセット）
+- DBへの保存なし
+
+### アーキテクチャ（Edge Function 移行済み）
+
+```
+フロントエンド
+  → POST /functions/v1/appraise-audio（Supabase JWT 付き）
+  → Edge Function（Deno）: Supabase Secrets から GEMINI_API_KEY を取得
+      - JWT でユーザーを認証
+      - playerId が自分の子供か確認（不正アクセス防止）
+      - Gemini 2.5 Flash API を呼び出し
+      - appraisal_logs テーブルに保存（RETRY 以外）
+  → レスポンスをフロントに返却
+```
+
+---
+
+## 10. マナカラー定義
+
+```typescript
+const MANA_COLORS = [
+  { label: 'ダーク',       value: '#1A1A2E' },  // Navy（デフォルト）
+  { label: 'アクア',       value: '#00D4FF' },  // LightBlue
+  { label: 'ピンク',       value: '#FF74B1' },  // Pink
+  { label: 'ライム',       value: '#39FF14' },  // Green
+  { label: 'スカーレット', value: '#FF3131' },  // Red
+];
+```
+
+マナカラーは `players.mana_color` に保存。グローバルな Context は不使用。
+各画面が AsyncStorage から `activePlayerId` を取得 → Supabase から `mana_color` をフェッチして適用。
+
+---
+
+## 11. UI/UXガイドライン
+
+### カラーパレット（ホーム画面の定数）
+
+```typescript
+const COLORS = {
+  background: '#0A0A15',  // 深いダークネイビー
+  cardBg:     '#12121A',
+  border:     '#1E1E2E',
+  text:       '#FFFFFF',
+  subText:    '#888899',
+};
+```
+
+- **基本テーマ:** ダークモード
+- **アクセント:** `mana_color` を使ったネオングロー効果
+- **カード:** `borderRadius: 16` を基本
+- **スタイリング:** `StyleSheet.create()` 一本化。NativeWind は不使用
+
+---
+
+## 12. ギルドマスターモード（管理者機能）
+
+- **アクセス方法:** ホーム画面の設定アイコン → 掛け算クイズ（1〜9の乱数）
+- **機能:**
+  - 勇者切り替えタブ（1親アカウント複数 `players` 対応）
+  - 目標設定（`goal_monthly`, `goal_yearly`）
+  - クエスト CRUD（タイトル / XP報酬 / 目標時間）
+  - ご褒美 CRUD（タイトル / 解放レベル）
+- **ルート:** `/admin`（Stack 画面）
+
+---
+
+## 13. 優先度付き課題リスト
+
+| 優先度 | 課題 | 内容 |
+|--------|------|------|
+| ~~🚨 最高~~ | ~~RLS ポリシー修正~~ | ✅ 2026-03-20 対応済み |
+| ~~🚨 最高~~ | ~~Gemini APIキー → Edge Function 移行~~ | ✅ 2026-03-20 対応済み |
+| ~~⚠️ 高~~ | ~~FK インデックス追加~~ | ✅ 2026-03-20 対応済み |
+| ⚠️ 高 | Auth: Leaked Password Protection を有効化 | Supabase Dashboard > Auth > Settings で有効化 |
+| 🔶 中 | appraisal_logs への書き込み実装 | Edge Function 移行と同時に対応 |
+| 🔶 中 | Auth トークンを SecureStore に移行 | 現在は AsyncStorage（非暗号化） |
+| 🔵 低 | profiles テーブルの書き込み実装 | サインアップ時に INSERT するトリガーまたはアプリコードを追加 |
+| 🔵 低 | `any` 型の排除 | 全 State・Props・APIレスポンスに型定義 |
+| 🔵 低 | お問い合わせフォームのDB保存 | `legal.tsx` の送信処理が現状 `console.log` のみ |
+
+---
+
+## 14. パッチ・既知の修正
+
+- **`patches/@react-navigation+core+7.16.1.patch`**: Hermes GC クラッシュ修正済み。
+  `getConfigsWithRegexes()` 内の `.map()` + `new RegExp()` を `for` ループに置換。
+  `package.json` の `postinstall: "patch-package"` で `npm install` 後も自動適用される。

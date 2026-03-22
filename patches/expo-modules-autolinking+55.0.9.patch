@@ -1,0 +1,61 @@
+diff --git a/node_modules/expo-modules-autolinking/build/platforms/apple/apple.js b/node_modules/expo-modules-autolinking/build/platforms/apple/apple.js
+index c714f71..a04c32f 100644
+--- a/node_modules/expo-modules-autolinking/build/platforms/apple/apple.js
++++ b/node_modules/expo-modules-autolinking/build/platforms/apple/apple.js
+@@ -116,7 +116,7 @@ async function generatePackageListFileContentAsync(modules, className, entitleme
+  * but only these that are written in Swift and use the new API for creating Expo modules.
+  */
+ 
+-internal import ExpoModulesCore
++import ExpoModulesCore
+ ${generateCommonImportList(swiftModules)}
+ ${generateDebugOnlyImportList(debugOnlySwiftModules)}
+ @objc(${className})
+@@ -140,13 +140,13 @@ ${generateReactDelegateHandlers(reactDelegateHandlerModules, debugOnlyReactDeleg
+ `;
+ }
+ function generateCommonImportList(swiftModules) {
+-    return swiftModules.map((moduleName) => `internal import ${moduleName}`).join('\n');
++    return swiftModules.map((moduleName) => `import ${moduleName}`).join('\n');
+ }
+ function generateDebugOnlyImportList(swiftModules) {
+     if (!swiftModules.length) {
+         return '';
+     }
+-    return (wrapInDebugConfigurationCheck(0, swiftModules.map((moduleName) => `internal import ${moduleName}`).join('\n')) + '\n');
++    return (wrapInDebugConfigurationCheck(0, swiftModules.map((moduleName) => `import ${moduleName}`).join('\n')) + '\n');
+ }
+ function generateModuleClasses(modules, debugOnlyModules) {
+     const commonClassNames = formatArrayOfModuleTuples(modules);
+diff --git a/node_modules/expo-modules-autolinking/src/platforms/apple/apple.ts b/node_modules/expo-modules-autolinking/src/platforms/apple/apple.ts
+index ab4bb48..150d391 100644
+--- a/node_modules/expo-modules-autolinking/src/platforms/apple/apple.ts
++++ b/node_modules/expo-modules-autolinking/src/platforms/apple/apple.ts
+@@ -167,7 +167,7 @@ async function generatePackageListFileContentAsync(
+  * but only these that are written in Swift and use the new API for creating Expo modules.
+  */
+ 
+-internal import ExpoModulesCore
++import ExpoModulesCore
+ ${generateCommonImportList(swiftModules)}
+ ${generateDebugOnlyImportList(debugOnlySwiftModules)}
+ @objc(${className})
+@@ -192,7 +192,8 @@ ${generateReactDelegateHandlers(reactDelegateHandlerModules, debugOnlyReactDeleg
+ }
+ 
+ function generateCommonImportList(swiftModules: string[]): string {
+-  return swiftModules.map((moduleName) => `internal import ${moduleName}`).join('\n');
++  return swiftModules.map((moduleName) => `import ${moduleName}`).join('
++');
+ }
+ 
+ function generateDebugOnlyImportList(swiftModules: string[]): string {
+@@ -203,7 +204,7 @@ function generateDebugOnlyImportList(swiftModules: string[]): string {
+   return (
+     wrapInDebugConfigurationCheck(
+       0,
+-      swiftModules.map((moduleName) => `internal import ${moduleName}`).join('\n')
++      swiftModules.map((moduleName) => `import ${moduleName}`).join('\n')
+     ) + '\n'
+   );
+ }

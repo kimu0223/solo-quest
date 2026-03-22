@@ -73,7 +73,23 @@ export default function LegalScreen() {
 
   const processDeletion = async () => {
     try {
-      await supabase.auth.signOut();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('セッションが見つかりません');
+
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/delete-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? '削除に失敗しました');
+      }
+
       await AsyncStorage.clear();
       router.replace('/auth/login');
     } catch (error) {

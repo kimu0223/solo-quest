@@ -7,10 +7,11 @@
     "icon": "./assets/images/icon.png",
     "scheme": "soloquest",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.kimu.soloquest",
+      "buildNumber": "4",
+      "deploymentTarget": "16.0",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "クエストの完了報告や日々の出来事を音声で記録し、その内容をAIが鑑定・評価するためにマイクを使用します。音声によるアウトプットを通じて、お子様の言語化能力を育むことを目的としています。",
         "ITSAppUsesNonExemptEncryption": false
@@ -18,19 +19,16 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#E6F4FE"
       },
       "package": "com.kimu.soloquest",
+      "versionCode": 4,
       "permissions": [
         "android.permission.AUDIO_CAPTURE",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
-      ],
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      ]
     },
     "web": {
       "output": "single",
@@ -41,7 +39,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -51,15 +49,17 @@
         }
       ],
       [
-        "expo-av",
+        "expo-audio",
         {
-          "microphonePermission": "クエストの完了報告や日々の出来事を音声で記録し、その内容をAIが鑑定・評価するためにマイクを使用します。音声によるアウトプットを通じて、お子様の言語化能力を育むことを目的としています。"
+          "microphonePermission": "クエストの完了報告や日々の出来事を音声で記録し、その内容をAIが鑑定・評価するためにマイクを使用します。音声によるアウトプットを通じて、お子様の言語化能力を育むことを目的としています."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-image",
+      "expo-web-browser"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
       "router": {},
