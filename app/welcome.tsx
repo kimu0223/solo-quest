@@ -2,10 +2,11 @@ import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -14,46 +15,160 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const ACCENT = '#00D4FF';
+const BG = '#0A0A15';
+const CARD = '#12121A';
+const BORDER = '#1E1E2E';
 
-const MOCK_QUESTS = ['📚 宿題をやる', '🦷 歯みがきをする', '🛏️ お片付け'];
-
-const STEPS = [
-  {
-    highlight: 'quests' as const,
-    title: 'クエストをクリアしよう！',
-    description: '毎日のお手伝いや宿題がクエストになってるよ。終わったら声で報告しよう！',
-  },
-  {
-    highlight: 'mic' as const,
-    title: 'マイクで報告するだけ！',
-    description: '「終わったよ！」とマイクに話しかけるだけでOK。難しい入力は一切不要 🎤',
-  },
-  {
-    highlight: 'xp' as const,
-    title: 'AIが経験値をくれる！',
-    description: 'ギルドマスターのAIが頑張りを評価。経験値が溜まってレベルアップ ⚔️',
-  },
+const MOCK_QUESTS = [
+  { title: '📚 宿題をやる', xp: 30 },
+  { title: '🦷 歯みがきをする', xp: 20 },
+  { title: '🛏️ お片付け', xp: 20 },
 ];
 
-function glowStyle(highlight: string, key: string) {
-  if (highlight !== key) return {};
-  return {
-    borderColor: ACCENT,
-    borderWidth: 2,
-    shadowColor: ACCENT,
-    shadowOpacity: 0.9,
-    shadowRadius: 14,
-    elevation: 14,
-  };
+// ─── Step 1: ホーム画面 ───────────────────────────────────────
+function SceneHome() {
+  return (
+    <View style={scene.container}>
+      {/* ヘッダー */}
+      <View style={scene.header}>
+        <Ionicons name="menu" size={28} color="#fff" />
+        <View>
+          <Text style={scene.playerName}>サトシ</Text>
+          <Text style={scene.levelText}>Lv.3</Text>
+        </View>
+        <Ionicons name="settings-sharp" size={24} color="#555" />
+      </View>
+
+      {/* XPバー */}
+      <View style={scene.xpCard}>
+        <Text style={scene.xpLabel}>次のレベルまで 35 XP</Text>
+        <View style={scene.xpBarBg}>
+          <View style={[scene.xpBarFill, { width: '65%', backgroundColor: ACCENT }]} />
+        </View>
+        <Text style={scene.xpSub}>本日の鑑定可能回数: 3 / 3</Text>
+      </View>
+
+      {/* クエスト一覧（ハイライト） */}
+      <View style={[scene.card, scene.highlightBorder]}>
+        <Text style={scene.cardTitle}>⚔️ 今日のクエスト</Text>
+        {MOCK_QUESTS.map((q, i) => (
+          <View key={i} style={scene.questRow}>
+            <View style={scene.checkbox} />
+            <Text style={scene.questText}>{q.title}</Text>
+            <Text style={scene.questXp}>{q.xp} XP</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
 }
+
+// ─── Step 2: 録音中 ───────────────────────────────────────────
+function SceneRecording() {
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.25, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <View style={scene.container}>
+      <View style={scene.header}>
+        <Ionicons name="menu" size={28} color="#fff" />
+        <View>
+          <Text style={scene.playerName}>サトシ</Text>
+          <Text style={scene.levelText}>Lv.3</Text>
+        </View>
+        <Ionicons name="settings-sharp" size={24} color="#555" />
+      </View>
+
+      <View style={[scene.card, { marginTop: 12 }]}>
+        <Text style={scene.cardTitle}>⚔️ 今日のクエスト</Text>
+        {MOCK_QUESTS.map((q, i) => (
+          <View key={i} style={scene.questRow}>
+            <View style={scene.checkbox} />
+            <Text style={scene.questText}>{q.title}</Text>
+            <Text style={scene.questXp}>{q.xp} XP</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* 録音中マイクボタン（パルスアニメ） */}
+      <View style={scene.micArea}>
+        <Animated.View style={[scene.micPulse, { transform: [{ scale: pulse }] }]} />
+        <View style={[scene.micBtn, scene.highlightBorder, { borderRadius: 50 }]}>
+          <Ionicons name="mic" size={32} color="#000" />
+        </View>
+        <Text style={scene.micCaption}>録音中… 🔴</Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Step 3: AI鑑定結果モーダル ───────────────────────────────
+function SceneResult() {
+  return (
+    <View style={scene.container}>
+      {/* 背景（暗め） */}
+      <View style={scene.modalOverlay} />
+
+      {/* 結果カード */}
+      <View style={[scene.resultCard, scene.highlightBorder]}>
+        <Text style={scene.rankLabel}>✨ 鑑定結果</Text>
+        <View style={[scene.rankBadge, { backgroundColor: '#FFD700' }]}>
+          <Text style={scene.rankText}>S</Text>
+        </View>
+        <Text style={scene.xpGained}>+ 100 XP</Text>
+        <Text style={scene.commentText}>
+          「見事じゃ！宿題もしっかり終え、素晴らしい報告だったのう！この調子で続けるがよい！」
+        </Text>
+        <View style={scene.closeBtnMock}>
+          <Text style={scene.closeBtnText}>閉じる</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── メイン ──────────────────────────────────────────────────
+const STEPS = [
+  {
+    scene: <SceneHome />,
+    title: 'クエストをクリアしよう！',
+    description: '毎日のお手伝いや宿題がクエストに。終わったら声でギルドマスターに報告しよう！',
+  },
+  {
+    scene: <SceneRecording />,
+    title: 'マイクで報告するだけ！',
+    description: 'ボタンを押して「終わったよ！」と話しかけるだけ。難しい入力は一切不要 🎤',
+  },
+  {
+    scene: <SceneResult />,
+    title: 'AIが即座に評価してくれる！',
+    description: 'ギルドマスターのAIが頑張りを判定。SランクでXPが大量ゲット！レベルアップを目指せ ⚔️',
+  },
+];
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const isLast = step === STEPS.length - 1;
-  const { highlight, title, description } = STEPS[step];
+
+  const goNext = () => {
+    Animated.sequence([
+      Animated.timing(slideAnim, { toValue: -20, duration: 80, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
+    ]).start();
+    setStep(step + 1);
+  };
 
   const handleGuest = async () => {
     setLoading(true);
@@ -70,61 +185,29 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <View style={styles.container}>
+      {/* アプリ画面シーン（全画面） */}
+      <Animated.View style={[styles.scene, { transform: [{ translateY: slideAnim }] }]}>
+        {STEPS[step].scene}
+      </Animated.View>
 
-      {/* ── モックアプリ画面 ── */}
-      <View style={styles.mockScreen}>
-
-        {/* XPバー・プレイヤー情報 */}
-        <View style={[styles.mockCard, styles.playerCard, glowStyle(highlight, 'xp')]}>
-          <View>
-            <Text style={styles.mockName}>サトシ</Text>
-            <Text style={styles.mockLevel}>Lv.3</Text>
-          </View>
-          <View style={styles.xpSection}>
-            <Text style={styles.xpLabel}>XP 65 / 100</Text>
-            <View style={styles.xpBarBg}>
-              <View style={[styles.xpBarFill, { width: '65%' }]} />
-            </View>
-          </View>
-        </View>
-
-        {/* クエスト一覧 */}
-        <View style={[styles.mockCard, glowStyle(highlight, 'quests')]}>
-          <Text style={styles.mockCardTitle}>⚔️ 今日のクエスト</Text>
-          {MOCK_QUESTS.map((q, i) => (
-            <View key={i} style={styles.questRow}>
-              <View style={styles.checkbox} />
-              <Text style={styles.questText}>{q}</Text>
-            </View>
+      {/* 下部オーバーレイカード */}
+      <SafeAreaView style={styles.overlay} edges={['bottom']}>
+        {/* ステップドット */}
+        <View style={styles.dots}>
+          {STEPS.map((_, i) => (
+            <View
+              key={i}
+              style={[styles.dot, i === step && { backgroundColor: ACCENT, width: 20 }]}
+            />
           ))}
         </View>
 
-        {/* 鑑定ボタン */}
-        <View style={[styles.micWrapper, glowStyle(highlight, 'mic')]}>
-          <Ionicons name="mic" size={22} color="#000" />
-          <Text style={styles.micLabel}>鑑定開始</Text>
-        </View>
-
-      </View>
-
-      {/* ── ステップドット ── */}
-      <View style={styles.dots}>
-        {STEPS.map((_, i) => (
-          <View
-            key={i}
-            style={[styles.dot, i === step && { backgroundColor: ACCENT, width: 20 }]}
-          />
-        ))}
-      </View>
-
-      {/* ── ツールチップ ── */}
-      <View style={styles.tooltip}>
-        <Text style={styles.tooltipTitle}>{title}</Text>
-        <Text style={styles.tooltipDesc}>{description}</Text>
+        <Text style={styles.title}>{STEPS[step].title}</Text>
+        <Text style={styles.desc}>{STEPS[step].description}</Text>
 
         {!isLast ? (
-          <TouchableOpacity style={styles.nextBtn} onPress={() => setStep(step + 1)}>
+          <TouchableOpacity style={styles.nextBtn} onPress={goNext}>
             <Text style={styles.nextBtnText}>次へ →</Text>
           </TouchableOpacity>
         ) : (
@@ -135,7 +218,6 @@ export default function WelcomeScreen() {
             >
               <Text style={styles.signupBtnText}>アカウントを作成する</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={styles.guestBtn}
               onPress={handleGuest}
@@ -149,112 +231,121 @@ export default function WelcomeScreen() {
             </TouchableOpacity>
           </View>
         )}
-      </View>
-
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A15' },
-
-  // ── Mock screen ──
-  mockScreen: {
-    flex: 3,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    justifyContent: 'center',
-    gap: 12,
+// ─── Scene styles ─────────────────────────────────────────────
+const scene = StyleSheet.create({
+  container: { flex: 1, backgroundColor: BG, paddingHorizontal: 16, paddingTop: 50 },
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 16,
   },
-  mockCard: {
-    backgroundColor: '#12121A',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#1E1E2E',
+  playerName: { color: '#fff', fontSize: 15, fontWeight: 'bold', textAlign: 'right' },
+  levelText: { color: ACCENT, fontSize: 12, textAlign: 'right' },
+  xpCard: {
+    backgroundColor: CARD, borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: BORDER, marginBottom: 12,
   },
-  playerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  xpLabel: { color: '#888899', fontSize: 11, marginBottom: 6 },
+  xpBarBg: { height: 6, backgroundColor: BORDER, borderRadius: 3, marginBottom: 4 },
+  xpBarFill: { height: 6, borderRadius: 3 },
+  xpSub: { color: '#ff4500', fontSize: 11, marginTop: 2 },
+  card: {
+    backgroundColor: CARD, borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: BORDER,
   },
-  mockName: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
-  mockLevel: { color: ACCENT, fontSize: 12, marginTop: 2 },
-  xpSection: { flex: 1, marginLeft: 16 },
-  xpLabel: { color: '#888899', fontSize: 11, marginBottom: 4 },
-  xpBarBg: { height: 6, backgroundColor: '#1E1E2E', borderRadius: 3 },
-  xpBarFill: { height: 6, backgroundColor: ACCENT, borderRadius: 3 },
-  mockCardTitle: { color: '#fff', fontSize: 13, fontWeight: 'bold', marginBottom: 10 },
+  highlightBorder: {
+    borderColor: ACCENT,
+    borderWidth: 2,
+    shadowColor: ACCENT,
+    shadowOpacity: 0.7,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  cardTitle: { color: '#fff', fontSize: 13, fontWeight: 'bold', marginBottom: 10 },
   questRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   checkbox: {
     width: 16, height: 16, borderRadius: 4,
-    borderWidth: 1.5, borderColor: '#888899',
-    marginRight: 10,
+    borderWidth: 1.5, borderColor: '#555', marginRight: 10,
   },
-  questText: { color: '#ccc', fontSize: 13 },
-  micWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: ACCENT,
-    borderRadius: 30,
-    paddingVertical: 12,
-    gap: 8,
-    alignSelf: 'center',
-    paddingHorizontal: 32,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  micLabel: { color: '#000', fontWeight: 'bold', fontSize: 14 },
+  questText: { flex: 1, color: '#ccc', fontSize: 13 },
+  questXp: { color: ACCENT, fontSize: 11, fontWeight: 'bold' },
 
-  // ── Dots ──
-  dots: { flexDirection: 'row', justifyContent: 'center', paddingVertical: 14, gap: 6 },
+  // Recording scene
+  micArea: { alignItems: 'center', marginTop: 30 },
+  micPulse: {
+    position: 'absolute',
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: ACCENT + '33',
+  },
+  micBtn: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: ACCENT,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  micCaption: { color: '#ff4444', fontSize: 13, marginTop: 16, fontWeight: 'bold' },
+
+  // Result scene
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  resultCard: {
+    margin: 20, marginTop: 60,
+    backgroundColor: CARD, borderRadius: 20, padding: 24,
+    alignItems: 'center',
+  },
+  rankLabel: { color: '#888899', fontSize: 13, marginBottom: 12 },
+  rankBadge: {
+    width: 72, height: 72, borderRadius: 36,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 8,
+  },
+  rankText: { fontSize: 36, fontWeight: 'bold', color: '#000' },
+  xpGained: { color: '#FFD700', fontSize: 22, fontWeight: 'bold', marginBottom: 14 },
+  commentText: { color: '#ccc', fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  closeBtnMock: {
+    backgroundColor: '#1E1E2E', borderRadius: 20,
+    paddingVertical: 10, paddingHorizontal: 40,
+  },
+  closeBtnText: { color: '#888', fontSize: 13 },
+});
+
+// ─── Main styles ──────────────────────────────────────────────
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: BG },
+  scene: { flex: 1 },
+
+  overlay: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(10,10,21,0.92)',
+    borderTopWidth: 1, borderTopColor: BORDER,
+    paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8,
+  },
+
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 14 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#333' },
 
-  // ── Tooltip ──
-  tooltip: {
-    flex: 2,
-    paddingHorizontal: 28,
-    paddingTop: 4,
-    paddingBottom: 8,
-  },
-  tooltipTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  tooltipDesc: {
-    color: '#888899',
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
+  title: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
+  desc: { color: '#888899', fontSize: 13, lineHeight: 20, textAlign: 'center', marginBottom: 20 },
+
   nextBtn: {
-    backgroundColor: ACCENT,
-    paddingVertical: 14,
-    borderRadius: 30,
-    alignItems: 'center',
+    backgroundColor: ACCENT, paddingVertical: 14,
+    borderRadius: 30, alignItems: 'center', marginBottom: 8,
   },
   nextBtnText: { color: '#000', fontWeight: 'bold', fontSize: 15 },
 
-  // ── Auth buttons (last step) ──
-  authArea: { gap: 12 },
+  authArea: { gap: 10, marginBottom: 4 },
   signupBtn: {
-    backgroundColor: ACCENT,
-    paddingVertical: 14,
-    borderRadius: 30,
-    alignItems: 'center',
+    backgroundColor: ACCENT, paddingVertical: 14,
+    borderRadius: 30, alignItems: 'center',
   },
   signupBtnText: { color: '#000', fontWeight: 'bold', fontSize: 15 },
   guestBtn: {
-    paddingVertical: 12,
-    borderRadius: 30,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
+    paddingVertical: 12, borderRadius: 30,
+    alignItems: 'center', borderWidth: 1, borderColor: '#333',
   },
   guestBtnText: { color: '#888', fontSize: 13 },
 });
