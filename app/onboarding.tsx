@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 
 const MANA_COLORS = [
-  { name: 'ネイビー', value: '#1A1A2E' },
+  { name: 'ゴールド', value: '#FFD700' },
   { name: 'ライトブルー', value: '#00D4FF' },
   { name: 'ピンク', value: '#FF74B1' },
   { name: 'グリーン', value: '#39FF14' },
