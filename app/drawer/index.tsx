@@ -57,9 +57,11 @@ export default function HomeScreen() {
     fetchData();
     checkDailyLimit();
     return () => {
-      if (recorder.isRecording) {
-        try { recorder.stop(); } catch (e) {}
-      }
+      try {
+        if (recorder.isRecording) {
+          recorder.stop();
+        }
+      } catch (e) {}
     };
   }, []);
 
