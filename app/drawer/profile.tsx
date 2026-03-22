@@ -82,7 +82,7 @@ export default function ProfileScreen() {
           <View style={[styles.avatarCircle, { backgroundColor: manaColor }]}>
             <Ionicons name="person" size={50} color="#fff" />
           </View>
-          <Text style={styles.name}>{player?.display_name || player?.name || '勇者'}</Text>
+          <Text style={styles.name}>{player?.display_name || player?.name || 'プレイヤー'}</Text>
           <View style={[styles.levelBadge, { backgroundColor: '#FFD700' }]}>
             <Text style={styles.levelText}>Lv.{player?.level || 1}</Text>
           </View>

@@ -69,7 +69,7 @@ export default function LoginScreen() {
         if (error) throw error;
 
         if (data.session) {
-          Alert.alert('成功', 'アカウントを作成しました！勇者を作りに行こう！');
+          Alert.alert('成功', 'アカウントを作成しました！プレイヤーを作りに行こう！');
           router.replace('/onboarding');
         } else {
           Alert.alert('確認', '確認メールを送信しました。メール内のリンクをクリックしてログインしてください。');

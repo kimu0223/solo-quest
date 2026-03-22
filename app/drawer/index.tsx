@@ -347,7 +347,7 @@ export default function HomeScreen() {
           <Ionicons name="menu" size={28} color={COLORS.text} />
         </TouchableOpacity>
         <View style={styles.statusBox}>
-          <Text style={styles.playerName}>{player?.display_name || '勇者'}</Text>
+          <Text style={styles.playerName}>{player?.display_name || 'プレイヤー'}</Text>
           <Text style={styles.levelText}>Lv.{player?.level || 1}</Text>
         </View>
         <TouchableOpacity onPress={handleSettingsPress} style={styles.iconButton}>

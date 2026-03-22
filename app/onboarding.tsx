@@ -59,7 +59,7 @@ export default function OnboardingScreen() {
 
   const createHero = async () => {
     if (!heroName.trim()) {
-      Alert.alert('エラー', '勇者のなまえを入力してください');
+      Alert.alert('エラー', 'プレイヤーのなまえを入力してください');
       return;
     }
     setLoading(true);
@@ -117,9 +117,9 @@ export default function OnboardingScreen() {
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.container}>
-          <Text style={styles.title}>新たな勇者を登録せよ</Text>
+          <Text style={styles.title}>新たなプレイヤーを登録せよ</Text>
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>勇者のなまえ</Text>
+            <Text style={styles.label}>プレイヤーのなまえ</Text>
             <TextInput
               style={[styles.input, { borderColor: selectedColor }]}
               placeholder="例: サトシ"

@@ -278,7 +278,7 @@ export default function AdminDashboard() {
 
               <View style={styles.inputCard}>
                 <Text style={styles.cardTitle}>クエスト作成</Text>
-                <Text style={styles.subText}>この勇者にクエストを配信します</Text>
+                <Text style={styles.subText}>このプレイヤーにクエストを配信します</Text>
                 
                 <TextInput
                   style={styles.input}

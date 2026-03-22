@@ -187,7 +187,7 @@ export default function RewardsScreen() {
               <Text style={styles.ticketTitle}>{selectedReward?.title}</Text>
               
               <View style={styles.ticketInfo}>
-                <Text style={styles.ticketLabel}>勇者名</Text>
+                <Text style={styles.ticketLabel}>プレイヤー名</Text>
                 <Text style={styles.ticketValue}>{playerName} 殿</Text>
               </View>
               <View style={styles.ticketInfo}>
