@@ -1,130 +1,260 @@
+import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-    Dimensions,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-const { width } = Dimensions.get('window');
+const ACCENT = '#00D4FF';
 
-const SLIDES = [
+const MOCK_QUESTS = ['📚 宿題をやる', '🦷 歯みがきをする', '🛏️ お片付け'];
+
+const STEPS = [
   {
-    id: 1,
-    title: '今日のお手伝いを\n声で報告しよう！',
-    description: '面倒なテキスト入力は一切不要！\n「お片付け終わったよ！」と\nマイクに向かって声に出すだけでOK🎤',
-    icon: 'mic-circle',
-    color: '#00D4FF',
+    highlight: 'quests' as const,
+    title: 'クエストをクリアしよう！',
+    description: '毎日のお手伝いや宿題がクエストになってるよ。終わったら声で報告しよう！',
   },
   {
-    id: 2,
-    title: 'AI鑑定士が褒めてくれる！\n経験値を貯めよう',
-    description: 'ギルドのAIがキミの頑張りをしっかり評価。\nRPGのように経験値が貯まって\nどんどんレベルアップしていくぞ！⚔️',
-    icon: 'star',
-    color: '#FFD700',
+    highlight: 'mic' as const,
+    title: 'マイクで報告するだけ！',
+    description: '「終わったよ！」とマイクに話しかけるだけでOK。難しい入力は一切不要 🎤',
   },
   {
-    id: 3,
-    title: 'パパ・ママと連携して\nご褒美をゲット！',
-    description: 'レベルが上がったら、家族が設定した\n「特別なご褒美」を解放しよう！\nさあ、冒険の準備はいいかな？🎁',
-    icon: 'gift',
-    color: '#FF74B1',
+    highlight: 'xp' as const,
+    title: 'AIが経験値をくれる！',
+    description: 'ギルドマスターのAIが頑張りを評価。経験値が溜まってレベルアップ ⚔️',
   },
 ];
 
+function glowStyle(highlight: string, key: string) {
+  if (highlight !== key) return {};
+  return {
+    borderColor: ACCENT,
+    borderWidth: 2,
+    shadowColor: ACCENT,
+    shadowOpacity: 0.9,
+    shadowRadius: 14,
+    elevation: 14,
+  };
+}
+
 export default function WelcomeScreen() {
   const router = useRouter();
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const [step, setStep] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const handleScroll = (event: any) => {
-    const scrollPosition = event.nativeEvent.contentOffset.x;
-    const index = Math.round(scrollPosition / width);
-    setCurrentIndex(index);
-  };
+  const isLast = step === STEPS.length - 1;
+  const { highlight, title, description } = STEPS[step];
 
-  const nextSlide = () => {
-    if (currentIndex < SLIDES.length - 1) {
-      scrollRef.current?.scrollTo({ x: width * (currentIndex + 1), animated: true });
-    } else {
-      router.replace('/auth/login');
+  const handleGuest = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInAnonymously();
+      if (error) throw error;
+      await AsyncStorage.setItem('isGuestUser', 'true');
+      router.replace('/onboarding');
+    } catch {
+      Alert.alert('エラー', 'ゲストログインに失敗しました。もう一度お試しください。');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const skipToLogin = () => {
-    router.replace('/auth/login');
-  };
-
   return (
-    <SafeAreaView style={styles.container}>
-      <TouchableOpacity style={styles.skipButton} onPress={skipToLogin}>
-        <Text style={styles.skipText}>スキップ</Text>
-      </TouchableOpacity>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
 
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        style={{ flex: 1 }}
-      >
-        {SLIDES.map((slide) => (
-          <View key={slide.id} style={[styles.slide, { width }]}>
-            <View style={[styles.iconContainer, { shadowColor: slide.color }]}>
-              <Ionicons name={slide.icon as any} size={120} color={slide.color} />
-            </View>
-            <Text style={styles.title}>{slide.title}</Text>
-            <Text style={styles.description}>{slide.description}</Text>
+      {/* ── モックアプリ画面 ── */}
+      <View style={styles.mockScreen}>
+
+        {/* XPバー・プレイヤー情報 */}
+        <View style={[styles.mockCard, styles.playerCard, glowStyle(highlight, 'xp')]}>
+          <View>
+            <Text style={styles.mockName}>サトシ</Text>
+            <Text style={styles.mockLevel}>Lv.3</Text>
           </View>
-        ))}
-      </ScrollView>
+          <View style={styles.xpSection}>
+            <Text style={styles.xpLabel}>XP 65 / 100</Text>
+            <View style={styles.xpBarBg}>
+              <View style={[styles.xpBarFill, { width: '65%' }]} />
+            </View>
+          </View>
+        </View>
 
-      <View style={styles.footer}>
-        <View style={styles.pagination}>
-          {SLIDES.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                currentIndex === index && styles.activeDot,
-                { backgroundColor: currentIndex === index ? SLIDES[currentIndex].color : '#333' }
-              ]}
-            />
+        {/* クエスト一覧 */}
+        <View style={[styles.mockCard, glowStyle(highlight, 'quests')]}>
+          <Text style={styles.mockCardTitle}>⚔️ 今日のクエスト</Text>
+          {MOCK_QUESTS.map((q, i) => (
+            <View key={i} style={styles.questRow}>
+              <View style={styles.checkbox} />
+              <Text style={styles.questText}>{q}</Text>
+            </View>
           ))}
         </View>
 
-        <TouchableOpacity
-          style={[styles.button, { backgroundColor: SLIDES[currentIndex].color }]}
-          onPress={nextSlide}
-        >
-          <Text style={styles.buttonText}>
-            {currentIndex === SLIDES.length - 1 ? '冒険を始める！' : '次へ'}
-          </Text>
-        </TouchableOpacity>
+        {/* 鑑定ボタン */}
+        <View style={[styles.micWrapper, glowStyle(highlight, 'mic')]}>
+          <Ionicons name="mic" size={22} color="#000" />
+          <Text style={styles.micLabel}>鑑定開始</Text>
+        </View>
+
       </View>
+
+      {/* ── ステップドット ── */}
+      <View style={styles.dots}>
+        {STEPS.map((_, i) => (
+          <View
+            key={i}
+            style={[styles.dot, i === step && { backgroundColor: ACCENT, width: 20 }]}
+          />
+        ))}
+      </View>
+
+      {/* ── ツールチップ ── */}
+      <View style={styles.tooltip}>
+        <Text style={styles.tooltipTitle}>{title}</Text>
+        <Text style={styles.tooltipDesc}>{description}</Text>
+
+        {!isLast ? (
+          <TouchableOpacity style={styles.nextBtn} onPress={() => setStep(step + 1)}>
+            <Text style={styles.nextBtnText}>次へ →</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.authArea}>
+            <TouchableOpacity
+              style={styles.signupBtn}
+              onPress={() => router.replace('/auth/login')}
+            >
+              <Text style={styles.signupBtnText}>アカウントを作成する</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.guestBtn}
+              onPress={handleGuest}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#888" />
+              ) : (
+                <Text style={styles.guestBtnText}>ゲストとして試してみる</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212' },
-  skipButton: { position: 'absolute', top: 60, right: 20, zIndex: 10, padding: 10 },
-  skipText: { color: '#888', fontSize: 14, fontWeight: 'bold' },
-  slide: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
-  iconContainer: { marginBottom: 40, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 30, elevation: 10 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#fff', textAlign: 'center', marginBottom: 20, lineHeight: 34 },
-  description: { fontSize: 14, color: '#aaa', textAlign: 'center', lineHeight: 24 },
-  footer: { padding: 40, alignItems: 'center' },
-  pagination: { flexDirection: 'row', marginBottom: 30 },
-  dot: { width: 10, height: 10, borderRadius: 5, marginHorizontal: 5 },
-  activeDot: { width: 20 },
-  button: { width: '100%', paddingVertical: 16, borderRadius: 30, alignItems: 'center' },
-  buttonText: { color: '#000', fontSize: 16, fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: '#0A0A15' },
+
+  // ── Mock screen ──
+  mockScreen: {
+    flex: 3,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    justifyContent: 'center',
+    gap: 12,
+  },
+  mockCard: {
+    backgroundColor: '#12121A',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#1E1E2E',
+  },
+  playerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  mockName: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  mockLevel: { color: ACCENT, fontSize: 12, marginTop: 2 },
+  xpSection: { flex: 1, marginLeft: 16 },
+  xpLabel: { color: '#888899', fontSize: 11, marginBottom: 4 },
+  xpBarBg: { height: 6, backgroundColor: '#1E1E2E', borderRadius: 3 },
+  xpBarFill: { height: 6, backgroundColor: ACCENT, borderRadius: 3 },
+  mockCardTitle: { color: '#fff', fontSize: 13, fontWeight: 'bold', marginBottom: 10 },
+  questRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  checkbox: {
+    width: 16, height: 16, borderRadius: 4,
+    borderWidth: 1.5, borderColor: '#888899',
+    marginRight: 10,
+  },
+  questText: { color: '#ccc', fontSize: 13 },
+  micWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: ACCENT,
+    borderRadius: 30,
+    paddingVertical: 12,
+    gap: 8,
+    alignSelf: 'center',
+    paddingHorizontal: 32,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  micLabel: { color: '#000', fontWeight: 'bold', fontSize: 14 },
+
+  // ── Dots ──
+  dots: { flexDirection: 'row', justifyContent: 'center', paddingVertical: 14, gap: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#333' },
+
+  // ── Tooltip ──
+  tooltip: {
+    flex: 2,
+    paddingHorizontal: 28,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  tooltipTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  tooltipDesc: {
+    color: '#888899',
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  nextBtn: {
+    backgroundColor: ACCENT,
+    paddingVertical: 14,
+    borderRadius: 30,
+    alignItems: 'center',
+  },
+  nextBtnText: { color: '#000', fontWeight: 'bold', fontSize: 15 },
+
+  // ── Auth buttons (last step) ──
+  authArea: { gap: 12 },
+  signupBtn: {
+    backgroundColor: ACCENT,
+    paddingVertical: 14,
+    borderRadius: 30,
+    alignItems: 'center',
+  },
+  signupBtnText: { color: '#000', fontWeight: 'bold', fontSize: 15 },
+  guestBtn: {
+    paddingVertical: 12,
+    borderRadius: 30,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  guestBtnText: { color: '#888', fontSize: 13 },
 });

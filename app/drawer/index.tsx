@@ -52,6 +52,7 @@ export default function HomeScreen() {
   const [showResultModal, setShowResultModal] = useState(false);
   const [aiResult, setAiResult] = useState<any>(null);
   const [dailyCount, setDailyCount] = useState(0);
+  const [isGuest, setIsGuest] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -70,6 +71,7 @@ export default function HomeScreen() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setIsGuest(!!user.is_anonymous);
 
       const activePlayerId = await AsyncStorage.getItem('activePlayerId');
       
@@ -116,10 +118,15 @@ export default function HomeScreen() {
 
   const checkDailyLimit = async () => {
     try {
+      const guest = await AsyncStorage.getItem('isGuestUser');
+      if (guest === 'true') {
+        const count = await AsyncStorage.getItem('guestAiUsageCount');
+        setDailyCount(parseInt(count || '0', 10));
+        return;
+      }
       const today = new Date().toDateString();
       const savedDate = await AsyncStorage.getItem('lastUsageDate');
       const savedCount = await AsyncStorage.getItem('dailyUsageCount');
-
       if (savedDate !== today) {
         await AsyncStorage.setItem('lastUsageDate', today);
         await AsyncStorage.setItem('dailyUsageCount', '0');
@@ -136,7 +143,12 @@ export default function HomeScreen() {
     try {
       const newCount = dailyCount + 1;
       setDailyCount(newCount);
-      await AsyncStorage.setItem('dailyUsageCount', newCount.toString());
+      const guest = await AsyncStorage.getItem('isGuestUser');
+      if (guest === 'true') {
+        await AsyncStorage.setItem('guestAiUsageCount', newCount.toString());
+      } else {
+        await AsyncStorage.setItem('dailyUsageCount', newCount.toString());
+      }
     } catch (e) {
       console.error("Increment error:", e);
     }
@@ -169,11 +181,22 @@ export default function HomeScreen() {
 
   const startRecording = async () => {
     if (dailyCount >= DAILY_LIMIT) {
-      Alert.alert(
-        "本日の回数終了",
-        "無料プランでは1日3回までです。\nプレミアムプランで無制限に話そう！\n（※現在は開発中につき制限のみ動作します）",
-        [{ text: "OK" }]
-      );
+      if (isGuest) {
+        Alert.alert(
+          "ゲストの利用上限",
+          "ゲストモードではAI鑑定を3回まで試せます。\nアカウントを登録すると毎日3回使えます！",
+          [
+            { text: "登録する", onPress: () => router.replace('/auth/login') },
+            { text: "閉じる", style: "cancel" },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "本日の回数終了",
+          "無料プランでは1日3回までです。\nプレミアムプランで無制限に話そう！\n（※現在は開発中につき制限のみ動作します）",
+          [{ text: "OK" }]
+        );
+      }
       return;
     }
 
@@ -316,7 +339,9 @@ export default function HomeScreen() {
         />
         <Text style={styles.nextLevelText}>次のレベルまで {100 - progress} XP</Text>
         <Text style={styles.limitText}>
-           本日の鑑定可能回数: {Math.max(0, DAILY_LIMIT - dailyCount)} / {DAILY_LIMIT}
+          {isGuest
+            ? `ゲスト鑑定残り回数: ${Math.max(0, DAILY_LIMIT - dailyCount)} / ${DAILY_LIMIT}`
+            : `本日の鑑定可能回数: ${Math.max(0, DAILY_LIMIT - dailyCount)} / ${DAILY_LIMIT}`}
         </Text>
       </View>
 
@@ -342,6 +367,18 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      {isGuest && (
+        <TouchableOpacity
+          style={styles.guestBanner}
+          onPress={() => router.replace('/auth/login')}
+        >
+          <Ionicons name="person-add-outline" size={16} color="#000" />
+          <Text style={styles.guestBannerText}>
+            ゲストモード中 — 登録してデータを保存しよう！
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color="#000" />
+        </TouchableOpacity>
+      )}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())} style={styles.iconButton}>
           <Ionicons name="menu" size={28} color={COLORS.text} />
@@ -459,6 +496,15 @@ const styles = StyleSheet.create({
   xpSection: { alignItems: 'center', marginVertical: 20 },
   nextLevelText: { color: COLORS.subText, marginTop: 10, fontSize: 12 },
   limitText: { color: '#ff4500', marginTop: 5, fontSize: 12, fontWeight: 'bold' },
+  guestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFD700',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  guestBannerText: { flex: 1, color: '#000', fontSize: 12, fontWeight: 'bold' },
 
   nextRewardCard: { 
     flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, 
