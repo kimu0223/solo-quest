@@ -1,5 +1,5 @@
 diff --git a/node_modules/@react-navigation/core/lib/module/getStateFromPath.js b/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
-index 7132844..4758442 100644
+index 7132844..dfab5e2 100644
 --- a/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
 +++ b/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
 @@ -235,11 +235,19 @@ function checkForDuplicatedConfigs(configs) {
@@ -27,3 +27,44 @@ index 7132844..4758442 100644
  }
  const matchAgainstConfigs = (remaining, configs) => {
    let routes;
+@@ -379,19 +387,30 @@ const createConfigItem = (screen, routeNames, paths, parse) => {
+       screen
+     })));
+   }
+-  const regex = parts.length ? new RegExp(`^(${parts.map((it, i) => {
++  // Use for loops instead of .map() to avoid Hermes GC bug (EXC_BAD_ACCESS)
++  // when creating new RegExp() inside Array.prototype.map()
++  let regexParts = '';
++  for (let i = 0; i < parts.length; i++) {
++    const it = parts[i];
+     if (it.param) {
+       const reg = it.regex || '[^/]+';
+-      return `(((?<param_${i}>${reg})\\/)${it.optional ? '?' : ''})`;
++      regexParts += `(((?<param_${i}>${reg})\\/)${it.optional ? '?' : ''})`;
++    } else {
++      regexParts += `${it.segment === '*' ? '.*' : escape(it.segment)}\\/`;
+     }
+-    return `${it.segment === '*' ? '.*' : escape(it.segment)}\\/`;
+-  }).join('')})$`) : undefined;
+-  const segments = parts.map(it => it.segment);
+-  const params = parts.map((it, i) => it.param ? {
+-    index: i,
+-    screen: it.screen,
+-    name: it.param
+-  } : null).filter(it => it != null);
++  }
++  const regex = parts.length ? new RegExp(`^(${regexParts})$`) : undefined;
++  const segments = [];
++  for (let i = 0; i < parts.length; i++) {
++    segments.push(parts[i].segment);
++  }
++  const params = [];
++  for (let i = 0; i < parts.length; i++) {
++    const it = parts[i];
++    if (it.param) {
++      params.push({ index: i, screen: it.screen, name: it.param });
++    }
++  }
+   return {
+     screen,
+     regex,
