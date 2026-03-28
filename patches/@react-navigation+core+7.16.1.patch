@@ -1,5 +1,72 @@
+diff --git a/node_modules/@react-navigation/core/lib/module/getPathFromState.js b/node_modules/@react-navigation/core/lib/module/getPathFromState.js
+index ef4e3af..24bd82f 100644
+--- a/node_modules/@react-navigation/core/lib/module/getPathFromState.js
++++ b/node_modules/@react-navigation/core/lib/module/getPathFromState.js
+@@ -76,20 +76,25 @@ export function getPathFromState(state, options) {
+       nestedRouteNames.push(route.name);
+       if (route.params) {
+         const options = currentOptions[route.name];
+-        const currentParams = Object.fromEntries(Object.entries(route.params).map(([key, value]) => {
++        // Use for loop instead of .map() to avoid Hermes GC bug with String() calls
++        const currentParamsEntries = [];
++        const routeParamEntries = Object.entries(route.params);
++        for (let pi = 0; pi < routeParamEntries.length; pi++) {
++          const [key, value] = routeParamEntries[pi];
+           if (value === undefined) {
+             if (options) {
+               const optional = options.parts?.find(part => part.param === key)?.optional;
+               if (optional) {
+-                return null;
++                continue;
+               }
+             } else {
+-              return null;
++              continue;
+             }
+           }
+           const stringify = options?.stringify?.[key] ?? String;
+-          return [key, stringify(value)];
+-        }).filter(entry => entry != null));
++          currentParamsEntries.push([key, stringify(value)]);
++        }
++        const currentParams = Object.fromEntries(currentParamsEntries);
+         if (parts?.length) {
+           Object.assign(allParams, currentParams);
+         }
+@@ -156,7 +161,14 @@ export function getPathFromState(state, options) {
+ 
+           // Valid characters according to
+           // https://datatracker.ietf.org/doc/html/rfc3986#section-3.3 (see pchar definition)
+-          return Array.from(String(value)).map(char => /[^A-Za-z0-9\-._~!$&'()*+,;=:@]/g.test(char) ? encodeURIComponent(char) : char).join('');
++          // Use for loop instead of .map() to avoid Hermes GC bug with String()/toString() calls
++          const strValue = String(value);
++          let encodedValue = '';
++          for (let ci = 0; ci < strValue.length; ci++) {
++            const char = strValue[ci];
++            encodedValue += /[^A-Za-z0-9\-._~!$&'()*+,;=:@]/g.test(char) ? encodeURIComponent(char) : char;
++          }
++          return encodedValue;
+         }
+         return encodeURIComponent(segment);
+       }).join('/');
+@@ -164,7 +176,14 @@ export function getPathFromState(state, options) {
+       path += encodeURIComponent(route.name);
+     }
+     if (!focusedParams && focusedRoute.params) {
+-      focusedParams = Object.fromEntries(Object.entries(focusedRoute.params).map(([key, value]) => [key, String(value)]));
++      // Use for loop instead of .map() to avoid Hermes GC bug with String() calls
++      const focusedParamsEntries = [];
++      const focusedRouteParamEntries = Object.entries(focusedRoute.params);
++      for (let fi = 0; fi < focusedRouteParamEntries.length; fi++) {
++        const [key, value] = focusedRouteParamEntries[fi];
++        focusedParamsEntries.push([key, String(value)]);
++      }
++      focusedParams = Object.fromEntries(focusedParamsEntries);
+     }
+     if (route.state) {
+       path += '/';
 diff --git a/node_modules/@react-navigation/core/lib/module/getStateFromPath.js b/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
-index 7132844..dfab5e2 100644
+index 7132844..b865308 100644
 --- a/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
 +++ b/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
 @@ -235,11 +235,19 @@ function checkForDuplicatedConfigs(configs) {
@@ -27,7 +94,78 @@ index 7132844..dfab5e2 100644
  }
  const matchAgainstConfigs = (remaining, configs) => {
    let routes;
-@@ -379,19 +387,30 @@ const createConfigItem = (screen, routeNames, paths, parse) => {
+@@ -254,36 +262,48 @@ const matchAgainstConfigs = (remaining, configs) => {
+ 
+     // If our regex matches, we need to extract params from the path
+     if (match) {
+-      routes = config.routeNames.map(routeName => {
++      // Use for loops instead of .map() to avoid Hermes GC bug (EXC_BAD_ACCESS)
++      // when creating objects inside Array.prototype.map()
++      routes = [];
++      for (let ri = 0; ri < config.routeNames.length; ri++) {
++        const routeName = config.routeNames[ri];
+         const routeConfig = configs.find(c => {
+           // Check matching name AND pattern in case same screen is used at different levels in config
+           return c.screen === routeName && arrayStartsWith(config.segments, c.segments);
+         });
+-        const params = routeConfig && match.groups ? Object.fromEntries(Object.entries(match.groups).map(([key, value]) => {
+-          const index = Number(key.replace('param_', ''));
+-          const param = routeConfig.params.find(it => it.index === index);
+-          if (param?.screen === routeName && param?.name) {
+-            return [param.name, value];
++        let params = undefined;
++        if (routeConfig && match.groups) {
++          const groupEntries = Object.entries(match.groups);
++          const rawParams = [];
++          for (let gi = 0; gi < groupEntries.length; gi++) {
++            const [key, value] = groupEntries[gi];
++            const index = Number(key.replace('param_', ''));
++            const param = routeConfig.params.find(it => it.index === index);
++            if (param?.screen === routeName && param?.name) {
++              rawParams.push([param.name, value]);
++            }
++          }
++          const parsedParams = [];
++          for (let pi = 0; pi < rawParams.length; pi++) {
++            const [key, value] = rawParams[pi];
++            if (value == null) {
++              parsedParams.push([key, undefined]);
++            } else {
++              const decoded = decodeURIComponent(value);
++              const parsed = routeConfig.parse?.[key] ? routeConfig.parse[key](decoded) : decoded;
++              parsedParams.push([key, parsed]);
++            }
+           }
+-          return null;
+-        }).filter(it => it != null).map(([key, value]) => {
+-          if (value == null) {
+-            return [key, undefined];
++          if (parsedParams.length) {
++            params = Object.fromEntries(parsedParams);
+           }
+-          const decoded = decodeURIComponent(value);
+-          const parsed = routeConfig.parse?.[key] ? routeConfig.parse[key](decoded) : decoded;
+-          return [key, parsed];
+-        })) : undefined;
++        }
+         if (params && Object.keys(params).length) {
+-          return {
+-            name: routeName,
+-            params
+-          };
++          routes.push({ name: routeName, params });
++        } else {
++          routes.push({ name: routeName });
+         }
+-        return {
+-          name: routeName
+-        };
+-      });
++      }
+       remainingPath = remainingPath.replace(match[0], '');
+       break;
+     }
+@@ -379,19 +399,30 @@ const createConfigItem = (screen, routeNames, paths, parse) => {
        screen
      })));
    }
@@ -43,15 +181,7 @@ index 7132844..dfab5e2 100644
 +      regexParts += `(((?<param_${i}>${reg})\\/)${it.optional ? '?' : ''})`;
 +    } else {
 +      regexParts += `${it.segment === '*' ? '.*' : escape(it.segment)}\\/`;
-     }
--    return `${it.segment === '*' ? '.*' : escape(it.segment)}\\/`;
--  }).join('')})$`) : undefined;
--  const segments = parts.map(it => it.segment);
--  const params = parts.map((it, i) => it.param ? {
--    index: i,
--    screen: it.screen,
--    name: it.param
--  } : null).filter(it => it != null);
++    }
 +  }
 +  const regex = parts.length ? new RegExp(`^(${regexParts})$`) : undefined;
 +  const segments = [];
@@ -63,7 +193,15 @@ index 7132844..dfab5e2 100644
 +    const it = parts[i];
 +    if (it.param) {
 +      params.push({ index: i, screen: it.screen, name: it.param });
-+    }
+     }
+-    return `${it.segment === '*' ? '.*' : escape(it.segment)}\\/`;
+-  }).join('')})$`) : undefined;
+-  const segments = parts.map(it => it.segment);
+-  const params = parts.map((it, i) => it.param ? {
+-    index: i,
+-    screen: it.screen,
+-    name: it.param
+-  } : null).filter(it => it != null);
 +  }
    return {
      screen,
