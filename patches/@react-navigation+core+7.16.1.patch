@@ -1,5 +1,5 @@
 diff --git a/node_modules/@react-navigation/core/lib/module/getPathFromState.js b/node_modules/@react-navigation/core/lib/module/getPathFromState.js
-index ef4e3af..24bd82f 100644
+index ef4e3af..4edabcb 100644
 --- a/node_modules/@react-navigation/core/lib/module/getPathFromState.js
 +++ b/node_modules/@react-navigation/core/lib/module/getPathFromState.js
 @@ -76,20 +76,25 @@ export function getPathFromState(state, options) {
@@ -33,23 +33,72 @@ index ef4e3af..24bd82f 100644
          if (parts?.length) {
            Object.assign(allParams, currentParams);
          }
-@@ -156,7 +161,14 @@ export function getPathFromState(state, options) {
+@@ -134,37 +139,56 @@ export function getPathFromState(state, options) {
+       }
+     }
+     if (currentOptions[route.name] !== undefined) {
+-      path += parts?.map(({
+-        segment,
+-        param,
+-        optional
+-      }) => {
+-        // We don't know what to show for wildcard patterns
+-        // Showing the route name seems ok, though whatever we show here will be incorrect
+-        // Since the page doesn't actually exist
+-        if (segment === '*') {
+-          return route.name;
+-        }
+-
+-        // If the path has a pattern for a param, put the param in the path
+-        if (param) {
+-          const value = allParams[param];
+-          if (value === undefined && optional) {
+-            // Optional params without value assigned in route.params should be ignored
+-            return '';
++      // Use for loop instead of .map() to avoid Hermes GC bug (EXC_BAD_ACCESS)
++      // when creating strings inside arrayPrototypeMap
++      if (parts) {
++        const pathSegments = [];
++        for (let si = 0; si < parts.length; si++) {
++          const { segment, param, optional } = parts[si];
++          // We don't know what to show for wildcard patterns
++          // Showing the route name seems ok, though whatever we show here will be incorrect
++          // Since the page doesn't actually exist
++          if (segment === '*') {
++            pathSegments.push(route.name);
++            continue;
+           }
  
-           // Valid characters according to
-           // https://datatracker.ietf.org/doc/html/rfc3986#section-3.3 (see pchar definition)
+-          // Valid characters according to
+-          // https://datatracker.ietf.org/doc/html/rfc3986#section-3.3 (see pchar definition)
 -          return Array.from(String(value)).map(char => /[^A-Za-z0-9\-._~!$&'()*+,;=:@]/g.test(char) ? encodeURIComponent(char) : char).join('');
-+          // Use for loop instead of .map() to avoid Hermes GC bug with String()/toString() calls
-+          const strValue = String(value);
-+          let encodedValue = '';
-+          for (let ci = 0; ci < strValue.length; ci++) {
-+            const char = strValue[ci];
-+            encodedValue += /[^A-Za-z0-9\-._~!$&'()*+,;=:@]/g.test(char) ? encodeURIComponent(char) : char;
++          // If the path has a pattern for a param, put the param in the path
++          if (param) {
++            const value = allParams[param];
++            if (value === undefined && optional) {
++              // Optional params without value assigned in route.params should be ignored
++              pathSegments.push('');
++              continue;
++            }
++
++            // Valid characters according to
++            // https://datatracker.ietf.org/doc/html/rfc3986#section-3.3 (see pchar definition)
++            const strValue = String(value);
++            let encodedValue = '';
++            for (let ci = 0; ci < strValue.length; ci++) {
++              const char = strValue[ci];
++              encodedValue += /[^A-Za-z0-9\-._~!$&'()*+,;=:@]/g.test(char) ? encodeURIComponent(char) : char;
++            }
++            pathSegments.push(encodedValue);
++            continue;
 +          }
-+          return encodedValue;
++          pathSegments.push(encodeURIComponent(segment));
          }
-         return encodeURIComponent(segment);
-       }).join('/');
-@@ -164,7 +176,14 @@ export function getPathFromState(state, options) {
+-        return encodeURIComponent(segment);
+-      }).join('/');
++        path += pathSegments.join('/');
++      }
+     } else {
        path += encodeURIComponent(route.name);
      }
      if (!focusedParams && focusedRoute.params) {
@@ -66,10 +115,29 @@ index ef4e3af..24bd82f 100644
      if (route.state) {
        path += '/';
 diff --git a/node_modules/@react-navigation/core/lib/module/getStateFromPath.js b/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
-index 7132844..b865308 100644
+index 7132844..db67fa5 100644
 --- a/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
 +++ b/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
-@@ -235,11 +235,19 @@ function checkForDuplicatedConfigs(configs) {
+@@ -137,7 +137,17 @@ function getInitialRoutes(options) {
+ }
+ function getSortedNormalizedConfigs(initialRoutes, screens = {}) {
+   // Create a normalized configs array which will be easier to use
+-  return [].concat(...Object.keys(screens).map(key => createNormalizedConfigs(key, screens, initialRoutes, [], [], []))).sort((a, b) => {
++  // Use for loop instead of .map() + concat to avoid Hermes GC bug (EXC_BAD_ACCESS)
++  // when creating objects inside arrayPrototypeMap with nested forEach calls
++  const allConfigs = [];
++  const screenKeys = Object.keys(screens);
++  for (let i = 0; i < screenKeys.length; i++) {
++    const result = createNormalizedConfigs(screenKeys[i], screens, initialRoutes, [], [], []);
++    for (let j = 0; j < result.length; j++) {
++      allConfigs.push(result[j]);
++    }
++  }
++  return allConfigs.sort((a, b) => {
+     // Sort config from most specific to least specific:
+     // - more segments
+     // - static segments
+@@ -235,11 +245,19 @@ function checkForDuplicatedConfigs(configs) {
    }, {});
  }
  function getConfigsWithRegexes(configs) {
@@ -94,7 +162,7 @@ index 7132844..b865308 100644
  }
  const matchAgainstConfigs = (remaining, configs) => {
    let routes;
-@@ -254,36 +262,48 @@ const matchAgainstConfigs = (remaining, configs) => {
+@@ -254,36 +272,48 @@ const matchAgainstConfigs = (remaining, configs) => {
  
      // If our regex matches, we need to extract params from the path
      if (match) {
@@ -165,9 +233,24 @@ index 7132844..b865308 100644
        remainingPath = remainingPath.replace(match[0], '');
        break;
      }
-@@ -379,19 +399,30 @@ const createConfigItem = (screen, routeNames, paths, parse) => {
-       screen
-     })));
+@@ -370,28 +400,41 @@ const createConfigItem = (screen, routeNames, paths, parse) => {
+   const parts = [];
+ 
+   // Parse the path string into parts for easier matching
++  // Use for loop instead of .map() to avoid Hermes GC bug (EXC_BAD_ACCESS)
++  // when creating objects with spread inside arrayPrototypeMap
+   for (const {
+     screen,
+     path
+   } of paths) {
+-    parts.push(...getPatternParts(path).map(part => ({
+-      ...part,
+-      screen
+-    })));
++    const patternParts = getPatternParts(path);
++    for (let ppi = 0; ppi < patternParts.length; ppi++) {
++      parts.push({ ...patternParts[ppi], screen });
++    }
    }
 -  const regex = parts.length ? new RegExp(`^(${parts.map((it, i) => {
 +  // Use for loops instead of .map() to avoid Hermes GC bug (EXC_BAD_ACCESS)
