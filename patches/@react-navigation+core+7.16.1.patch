@@ -1,3 +1,182 @@
+diff --git a/node_modules/@react-navigation/core/lib/module/StaticNavigation.js b/node_modules/@react-navigation/core/lib/module/StaticNavigation.js
+index e20d571..1c8ff1b 100644
+--- a/node_modules/@react-navigation/core/lib/module/StaticNavigation.js
++++ b/node_modules/@react-navigation/core/lib/module/StaticNavigation.js
+@@ -39,7 +39,10 @@ const MemoizedScreen = /*#__PURE__*/React.memo(({
+ });
+ MemoizedScreen.displayName = 'Memo(Screen)';
+ const getItemsFromScreens = (Screen, screens) => {
+-  return Object.entries(screens).map(([name, item]) => {
++  const _screenEntries = Object.entries(screens);
++  const _result = [];
++  for (let _i = 0; _i < _screenEntries.length; _i++) {
++    const [name, item] = _screenEntries[_i];
+     let component;
+     let props = {};
+     let useIf;
+@@ -70,18 +73,23 @@ const getItemsFromScreens = (Screen, screens) => {
+     const element = isNavigator ? (/*#__PURE__*/React.createElement(component, {})) : /*#__PURE__*/_jsx(MemoizedScreen, {
+       component: component
+     });
+-    return () => {
+-      const shouldRender = useIf == null || useIf();
++    const _capturedName = name;
++    const _capturedProps = props;
++    const _capturedUseIf = useIf;
++    const _capturedElement = element;
++    _result.push(() => {
++      const shouldRender = _capturedUseIf == null || _capturedUseIf();
+       if (!shouldRender) {
+         return null;
+       }
+       return /*#__PURE__*/_jsx(Screen, {
+-        name: name,
+-        ...props,
+-        children: () => element
+-      }, name);
+-    };
+-  });
++        name: _capturedName,
++        ..._capturedProps,
++        children: () => _capturedElement
++      }, _capturedName);
++    });
++  }
++  return _result;
+ };
+ 
+ /**
+@@ -115,29 +123,39 @@ export function createComponentForStaticNavigation(tree, displayName) {
+       items.push(...getItemsFromScreens(Screen, screens));
+     }
+     if (key === 'groups' && groups) {
+-      items.push(...Object.entries(groups).map(([key, {
+-        if: useIf,
+-        ...group
+-      }]) => {
+-        const groupItems = getItemsFromScreens(Screen, group.screens);
+-        return () => {
++      const _groupEntries = Object.entries(groups);
++      for (let _gi = 0; _gi < _groupEntries.length; _gi++) {
++        const [_groupKey, _groupVal] = _groupEntries[_gi];
++        const { if: _useIf, ..._group } = _groupVal;
++        const _groupItems = getItemsFromScreens(Screen, _group.screens);
++        const _capturedGroupKey = _groupKey;
++        const _capturedGroup = _group;
++        const _capturedUseIf = _useIf;
++        const _capturedGroupItems = _groupItems;
++        items.push(() => {
+           // Call unconditionally since screen configs may contain `useIf` hooks
+-          const children = groupItems.map(item => item());
+-          const shouldRender = useIf == null || useIf();
++          const children = [];
++          for (let _ci = 0; _ci < _capturedGroupItems.length; _ci++) {
++            children.push(_capturedGroupItems[_ci]());
++          }
++          const shouldRender = _capturedUseIf == null || _capturedUseIf();
+           if (!shouldRender) {
+             return null;
+           }
+           return /*#__PURE__*/_jsx(Group, {
+-            navigationKey: key,
+-            ...group,
++            navigationKey: _capturedGroupKey,
++            ..._capturedGroup,
+             children: children
+-          }, key);
+-        };
+-      }));
++          }, _capturedGroupKey);
++        });
++      }
+     }
+   }
+   const NavigatorComponent = () => {
+-    const children = items.map(item => item());
++    const children = [];
++    for (let _ii = 0; _ii < items.length; _ii++) {
++      children.push(items[_ii]());
++    }
+     return /*#__PURE__*/_jsx(Navigator, {
+       ...rest,
+       children: children
+@@ -170,18 +188,17 @@ export function createPathConfigForStaticNavigation(tree, options, auto) {
+   let initialScreenConfig;
+   const createPathConfigForTree = (t, o, skipInitialDetection) => {
+     const createPathConfigForScreens = (screens, initialRouteName) => {
+-      return Object.fromEntries(Object.entries(screens)
+       // Re-order to move the initial route to the front
+       // This way we can detect the initial route correctly
+-      .sort(([a], [b]) => {
+-        if (a === initialRouteName) {
+-          return -1;
+-        }
+-        if (b === initialRouteName) {
+-          return 1;
+-        }
++      const _screenEntries = Object.entries(screens);
++      _screenEntries.sort(([a], [b]) => {
++        if (a === initialRouteName) { return -1; }
++        if (b === initialRouteName) { return 1; }
+         return 0;
+-      }).map(([key, item]) => {
++      });
++      const _result = {};
++      for (let _i = 0; _i < _screenEntries.length; _i++) {
++        const [key, item] = _screenEntries[_i];
+         const screenConfig = {};
+         if ('linking' in item) {
+           if (typeof item.linking === 'string') {
+@@ -194,15 +211,15 @@ export function createPathConfigForStaticNavigation(tree, options, auto) {
+             .replace(/\/$/, ''); // Remove extra trailing slash
+           }
+         }
+-        let screens;
++        let childScreens;
+         const skipInitialDetectionInChild = skipInitialDetection || screenConfig.path != null && screenConfig.path !== '';
+         if ('config' in item) {
+-          screens = createPathConfigForTree(item, undefined, skipInitialDetectionInChild);
++          childScreens = createPathConfigForTree(item, undefined, skipInitialDetectionInChild);
+         } else if ('screen' in item && 'config' in item.screen && (item.screen.config.screens || item.screen.config.groups)) {
+-          screens = createPathConfigForTree(item.screen, undefined, skipInitialDetectionInChild);
++          childScreens = createPathConfigForTree(item.screen, undefined, skipInitialDetectionInChild);
+         }
+-        if (screens) {
+-          screenConfig.screens = screens;
++        if (childScreens) {
++          screenConfig.screens = childScreens;
+         }
+         if (auto && !screenConfig.screens &&
+         // Skip generating path for screens that specify linking config as `undefined` or `null` explicitly
+@@ -224,8 +241,11 @@ export function createPathConfigForStaticNavigation(tree, options, auto) {
+             screenConfig.path = key.replace(/([A-Z]+)/g, '-$1').replace(/^-/, '').toLowerCase();
+           }
+         }
+-        return [key, screenConfig];
+-      }).filter(([, screen]) => Object.keys(screen).length > 0));
++        if (Object.keys(screenConfig).length > 0) {
++          _result[key] = screenConfig;
++        }
++      }
++      return _result;
+     };
+     const screens = {};
+ 
+@@ -236,9 +256,11 @@ export function createPathConfigForStaticNavigation(tree, options, auto) {
+         Object.assign(screens, createPathConfigForScreens(t.config.screens, o?.initialRouteName ?? t.config.initialRouteName));
+       }
+       if (key === 'groups' && t.config.groups) {
+-        Object.entries(t.config.groups).forEach(([, group]) => {
+-          Object.assign(screens, createPathConfigForScreens(group.screens, o?.initialRouteName ?? t.config.initialRouteName));
+-        });
++        const _tGroupEntries = Object.entries(t.config.groups);
++        for (let _tgi = 0; _tgi < _tGroupEntries.length; _tgi++) {
++          const _tGroup = _tGroupEntries[_tgi][1];
++          Object.assign(screens, createPathConfigForScreens(_tGroup.screens, o?.initialRouteName ?? t.config.initialRouteName));
++        }
+       }
+     }
+     if (Object.keys(screens).length === 0) {
 diff --git a/node_modules/@react-navigation/core/lib/module/getPathFromState.js b/node_modules/@react-navigation/core/lib/module/getPathFromState.js
 index ef4e3af..4edabcb 100644
 --- a/node_modules/@react-navigation/core/lib/module/getPathFromState.js
@@ -114,6 +293,22 @@ index ef4e3af..4edabcb 100644
      }
      if (route.state) {
        path += '/';
+diff --git a/node_modules/@react-navigation/core/lib/module/getPatternParts.js b/node_modules/@react-navigation/core/lib/module/getPatternParts.js
+index 59b8008..37cc85c 100644
+--- a/node_modules/@react-navigation/core/lib/module/getPatternParts.js
++++ b/node_modules/@react-navigation/core/lib/module/getPatternParts.js
+@@ -90,7 +90,10 @@ export function getPatternParts(path) {
+   if (isRegex) {
+     throw new Error(`Could not find closing ')' in path: ${path}`);
+   }
+-  const params = parts.map(part => part.param).filter(Boolean);
++  const params = [];
++  for (let _i = 0; _i < parts.length; _i++) {
++    if (parts[_i].param) params.push(parts[_i].param);
++  }
+   for (const [index, param] of params.entries()) {
+     if (params.indexOf(param) !== index) {
+       throw new Error(`Duplicate param name '${param}' found in path: ${path}`);
 diff --git a/node_modules/@react-navigation/core/lib/module/getStateFromPath.js b/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
 index 7132844..db67fa5 100644
 --- a/node_modules/@react-navigation/core/lib/module/getStateFromPath.js
@@ -289,3 +484,169 @@ index 7132844..db67fa5 100644
    return {
      screen,
      regex,
+diff --git a/node_modules/@react-navigation/core/lib/module/useEventEmitter.js b/node_modules/@react-navigation/core/lib/module/useEventEmitter.js
+index 3a68aad..7ea70b9 100644
+--- a/node_modules/@react-navigation/core/lib/module/useEventEmitter.js
++++ b/node_modules/@react-navigation/core/lib/module/useEventEmitter.js
+@@ -48,7 +48,27 @@ export function useEventEmitter(listen) {
+     const items = listeners.current[type] || {};
+ 
+     // Copy the current list of callbacks in case they are mutated during execution
+-    const callbacks = target !== undefined ? items[target]?.slice() : [].concat(...Object.keys(items).map(t => items[t])).filter((cb, i, self) => self.lastIndexOf(cb) === i);
++    let callbacks;
++    if (target !== undefined) {
++      callbacks = items[target]?.slice();
++    } else {
++      const _itemKeys = Object.keys(items);
++      const _allCbs = [];
++      for (let _i = 0; _i < _itemKeys.length; _i++) {
++        const _group = items[_itemKeys[_i]];
++        if (_group) {
++          for (let _j = 0; _j < _group.length; _j++) {
++            _allCbs.push(_group[_j]);
++          }
++        }
++      }
++      callbacks = [];
++      for (let _i = 0; _i < _allCbs.length; _i++) {
++        if (_allCbs[_i] && _allCbs.lastIndexOf(_allCbs[_i]) === _i) {
++          callbacks.push(_allCbs[_i]);
++        }
++      }
++    }
+     const event = {
+       get type() {
+         return type;
+diff --git a/node_modules/@react-navigation/core/lib/module/useNavigationBuilder.js b/node_modules/@react-navigation/core/lib/module/useNavigationBuilder.js
+index cd5e325..8a77945 100644
+--- a/node_modules/@react-navigation/core/lib/module/useNavigationBuilder.js
++++ b/node_modules/@react-navigation/core/lib/module/useNavigationBuilder.js
+@@ -195,7 +195,10 @@ export function useNavigationBuilder(createRouter, options) {
+     acc[config.props.name] = config;
+     return acc;
+   }, {});
+-  const routeNames = routeConfigs.map(config => config.props.name);
++  const routeNames = [];
++  for (let _i = 0; _i < routeConfigs.length; _i++) {
++    routeNames.push(routeConfigs[_i].props.name);
++  }
+   const routeKeyList = routeNames.reduce((acc, curr) => {
+     acc[curr] = screens[curr].keys.map(key => key ?? '').join(':');
+     return acc;
+@@ -467,24 +470,34 @@ export function useNavigationBuilder(createRouter, options) {
+       return;
+     }
+     const navigation = descriptors[route.key].navigation;
+-    const listeners = [].concat(
+-    // Get an array of listeners for all screens + common listeners on navigator
+-    ...[screenListeners, ...routeNames.map(name => {
+-      const {
+-        listeners
+-      } = screens[name].props;
+-      return listeners;
+-    })].map(listeners => {
+-      const map = typeof listeners === 'function' ? listeners({
+-        route: route,
+-        navigation
+-      }) : listeners;
+-      return map ? Object.keys(map).filter(type => type === e.type).map(type => map?.[type]) : undefined;
+-    }))
+-    // We don't want same listener to be called multiple times for same event
+-    // So we remove any duplicate functions from the array
+-    .filter((cb, i, self) => cb && self.lastIndexOf(cb) === i);
+-    listeners.forEach(listener => listener?.(e));
++    // Step1: collect listener sources
++    const _allListenerSources = [screenListeners];
++    for (let _li = 0; _li < routeNames.length; _li++) {
++      _allListenerSources.push(screens[routeNames[_li]].props.listeners);
++    }
++    // Step2: evaluate and collect callbacks
++    const _rawCallbacks = [];
++    for (let _si = 0; _si < _allListenerSources.length; _si++) {
++      const _listenerSource = _allListenerSources[_si];
++      const _map = typeof _listenerSource === 'function'
++        ? _listenerSource({ route: route, navigation })
++        : _listenerSource;
++      if (!_map) continue;
++      const _mapKeys = Object.keys(_map);
++      for (let _ki = 0; _ki < _mapKeys.length; _ki++) {
++        if (_mapKeys[_ki] === e.type) _rawCallbacks.push(_map[_mapKeys[_ki]]);
++      }
++    }
++    // Step3: deduplicate
++    const listeners = [];
++    for (let _ci = 0; _ci < _rawCallbacks.length; _ci++) {
++      const _cb = _rawCallbacks[_ci];
++      if (_cb && _rawCallbacks.lastIndexOf(_cb) === _ci) listeners.push(_cb);
++    }
++    // Step4: execute
++    for (let _fi = 0; _fi < listeners.length; _fi++) {
++      listeners[_fi]?.(e);
++    }
+   });
+   useFocusEvents({
+     state,
+diff --git a/node_modules/@react-navigation/core/lib/module/useOnGetState.js b/node_modules/@react-navigation/core/lib/module/useOnGetState.js
+index 4218f27..a904f5a 100644
+--- a/node_modules/@react-navigation/core/lib/module/useOnGetState.js
++++ b/node_modules/@react-navigation/core/lib/module/useOnGetState.js
+@@ -17,16 +17,12 @@ export function useOnGetState({
+     const state = getState();
+ 
+     // Avoid returning new route objects if we don't need to
+-    const routes = state.routes.map(route => {
++    const routes = [];
++    for (let _i = 0; _i < state.routes.length; _i++) {
++      const route = state.routes[_i];
+       const childState = getStateListeners[route.key]?.();
+-      if (route.state === childState) {
+-        return route;
+-      }
+-      return {
+-        ...route,
+-        state: childState
+-      };
+-    });
++      routes.push(route.state === childState ? route : { ...route, state: childState });
++    }
+     if (isArrayEqual(state.routes, routes)) {
+       return state;
+     }
+diff --git a/node_modules/@react-navigation/core/lib/module/validatePathConfig.js b/node_modules/@react-navigation/core/lib/module/validatePathConfig.js
+index 1af1990..3065151 100644
+--- a/node_modules/@react-navigation/core/lib/module/validatePathConfig.js
++++ b/node_modules/@react-navigation/core/lib/module/validatePathConfig.js
+@@ -16,7 +16,10 @@ export function validatePathConfig(config, root = true) {
+   if (typeof config !== 'object' || config === null) {
+     throw new Error(`Expected the configuration to be an object, but got ${JSON.stringify(config)}.`);
+   }
+-  const validationErrors = Object.fromEntries(Object.keys(config).map(key => {
++  const validationErrors = {};
++  const _configKeys = Object.keys(config);
++  for (let _i = 0; _i < _configKeys.length; _i++) {
++    const key = _configKeys[_i];
+     if (key in validation) {
+       const type = validation[key];
+       // @ts-expect-error: we know the key exists
+@@ -24,17 +27,16 @@ export function validatePathConfig(config, root = true) {
+       if (value !== undefined) {
+         if (type === 'array') {
+           if (!Array.isArray(value)) {
+-            return [key, `expected 'Array', got '${typeof value}'`];
++            validationErrors[key] = `expected 'Array', got '${typeof value}'`;
+           }
+         } else if (typeof value !== type) {
+-          return [key, `expected '${type}', got '${typeof value}'`];
++          validationErrors[key] = `expected '${type}', got '${typeof value}'`;
+         }
+       }
+     } else {
+-      return [key, 'extraneous'];
++      validationErrors[key] = 'extraneous';
+     }
+-    return null;
+-  }).filter(Boolean));
++  }
+   if (Object.keys(validationErrors).length) {
+     throw new Error(`Found invalid properties in the configuration:\n${formatToList(validationErrors)}\n\nYou can only specify the following properties:\n${formatToList(validation)}\n\nIf you want to specify configuration for screens, you need to specify them under a 'screens' property.\n\nSee https://reactnavigation.org/docs/configuring-links for more details on how to specify a linking configuration.`);
+   }
